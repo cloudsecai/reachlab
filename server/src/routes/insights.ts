@@ -9,6 +9,8 @@ import {
   getChangelog,
   updateRecommendationFeedback,
   getRunningRun,
+  getLatestAnalysisGaps,
+  getLatestPromptSuggestions,
 } from "../db/ai-queries.js";
 import { createClient } from "../ai/client.js";
 import { runPipeline } from "../ai/orchestrator.js";
@@ -80,4 +82,12 @@ export function registerInsightsRoutes(app: FastifyInstance, db: Database.Databa
     const { runId } = request.params as { runId: string };
     return { logs: db.prepare("SELECT * FROM ai_logs WHERE run_id = ? ORDER BY id").all(Number(runId)) };
   });
+
+  app.get("/api/insights/gaps", async () => ({
+    gaps: getLatestAnalysisGaps(db),
+  }));
+
+  app.get("/api/insights/prompt-suggestions", async () => ({
+    prompt_suggestions: getLatestPromptSuggestions(db),
+  }));
 }

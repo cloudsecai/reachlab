@@ -162,3 +162,19 @@ describe("GET /api/insights/logs/:runId", () => {
     expect(res.json().logs).toEqual([]);
   });
 });
+
+describe("GET /api/insights/gaps", () => {
+  it("returns empty array when no gaps logged", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/insights/gaps" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().gaps).toEqual([]);
+  });
+});
+
+describe("GET /api/insights/prompt-suggestions", () => {
+  it("returns null when no analysis has run", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/insights/prompt-suggestions" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().prompt_suggestions).toBeNull();
+  });
+});
