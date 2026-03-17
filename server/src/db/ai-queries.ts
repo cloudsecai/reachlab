@@ -17,7 +17,7 @@ export interface InsightInput {
   stable_key: string;
   claim: string;
   evidence: string;
-  confidence: number;
+  confidence: string | number;
   direction: string;
   first_seen_run_id: number;
   consecutive_appearances?: number;
@@ -27,7 +27,7 @@ export interface RecommendationInput {
   run_id: number;
   type: string;
   priority: number;
-  confidence: number;
+  confidence: string | number;
   headline: string;
   detail: string;
   action: string;
@@ -40,6 +40,7 @@ export interface OverviewInput {
   top_performer_post_id: string | null;
   top_performer_reason: string | null;
   quick_insights: string;
+  prompt_suggestions_json: string | null;
 }
 
 export interface AiLogInput {
@@ -362,8 +363,10 @@ export function upsertOverview(
   db.transaction(() => {
     db.prepare("DELETE FROM ai_overview WHERE run_id = ?").run(input.run_id);
     db.prepare(
-      `INSERT INTO ai_overview (run_id, summary_text, top_performer_post_id, top_performer_reason, quick_insights)
-       VALUES (@run_id, @summary_text, @top_performer_post_id, @top_performer_reason, @quick_insights)`
+      `INSERT INTO ai_overview
+         (run_id, summary_text, top_performer_post_id, top_performer_reason, quick_insights, prompt_suggestions_json)
+       VALUES
+         (@run_id, @summary_text, @top_performer_post_id, @top_performer_reason, @quick_insights, @prompt_suggestions_json)`
     ).run(input);
   })();
 }
@@ -506,6 +509,119 @@ export function getPostCountSinceRun(
     )
     .get(runId) as { count: number };
   return row.count;
+}
+
+// ── settings ───────────────────────────────────────────────
+
+export function getSetting(db: Database.Database, key: string): string | null {
+  const row = db
+    .prepare("SELECT value FROM settings WHERE key = ?")
+    .get(key) as { value: string } | undefined;
+  return row?.value ?? null;
+}
+
+export function upsertSetting(db: Database.Database, key: string, value: string): void {
+  db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+  ).run(key, value);
+}
+
+// ── writing_prompt_history ─────────────────────────────────
+
+export interface WritingPromptHistoryRow {
+  id: number;
+  prompt_text: string;
+  source: string;
+  suggestion_evidence: string | null;
+  created_at: string;
+}
+
+export function saveWritingPromptHistory(
+  db: Database.Database,
+  input: { prompt_text: string; source: string; evidence: string | null }
+): void {
+  db.prepare(
+    `INSERT INTO writing_prompt_history (prompt_text, source, suggestion_evidence)
+     VALUES (?, ?, ?)`
+  ).run(input.prompt_text, input.source, input.evidence);
+}
+
+export function getWritingPromptHistory(db: Database.Database): WritingPromptHistoryRow[] {
+  return db
+    .prepare("SELECT * FROM writing_prompt_history ORDER BY id DESC")
+    .all() as WritingPromptHistoryRow[];
+}
+
+// ── ai_analysis_gaps ───────────────────────────────────────
+
+export interface AnalysisGapInput {
+  run_id: number | null;
+  gap_type: string;
+  stable_key: string;
+  description: string;
+  impact: string;
+}
+
+export interface AnalysisGapRow {
+  id: number;
+  run_id: number | null;
+  gap_type: string;
+  stable_key: string;
+  description: string;
+  impact: string;
+  times_flagged: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export function upsertAnalysisGap(db: Database.Database, input: AnalysisGapInput): void {
+  db.prepare(
+    `INSERT INTO ai_analysis_gaps (run_id, gap_type, stable_key, description, impact)
+     VALUES (@run_id, @gap_type, @stable_key, @description, @impact)
+     ON CONFLICT(gap_type, stable_key) DO UPDATE SET
+       description = excluded.description,
+       impact = excluded.impact,
+       times_flagged = times_flagged + 1,
+       last_seen_at = CURRENT_TIMESTAMP,
+       run_id = excluded.run_id`
+  ).run(input);
+}
+
+export function getLatestAnalysisGaps(db: Database.Database): AnalysisGapRow[] {
+  return db
+    .prepare(
+      "SELECT * FROM ai_analysis_gaps ORDER BY times_flagged DESC, last_seen_at DESC"
+    )
+    .all() as AnalysisGapRow[];
+}
+
+// ── prompt suggestions (stored in ai_overview) ─────────────
+
+export interface PromptSuggestion {
+  current: string;
+  suggested: string;
+  evidence: string;
+}
+
+export interface PromptSuggestions {
+  assessment: "working_well" | "suggest_changes";
+  reasoning: string;
+  suggestions: PromptSuggestion[];
+}
+
+export function getLatestPromptSuggestions(db: Database.Database): PromptSuggestions | null {
+  const latest = getLatestCompletedRun(db);
+  if (!latest) return null;
+  const row = db
+    .prepare("SELECT prompt_suggestions_json FROM ai_overview WHERE run_id = ? LIMIT 1")
+    .get(latest.id) as { prompt_suggestions_json: string | null } | undefined;
+  if (!row?.prompt_suggestions_json) return null;
+  try {
+    return JSON.parse(row.prompt_suggestions_json) as PromptSuggestions;
+  } catch {
+    return null;
+  }
 }
 
 export function getRecentFeedbackWithReasons(

@@ -264,6 +264,7 @@ In one sentence, explain why this post resonated with the audience.`,
         quick_insights: JSON.stringify(
           analysis.insights.slice(0, 5).map((i) => i.claim)
         ),
+        prompt_suggestions_json: null,
       });
     }
 

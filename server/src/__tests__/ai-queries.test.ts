@@ -31,6 +31,13 @@ import {
   upsertImageTag,
   getImageTags,
   getUnclassifiedImagePosts,
+  getSetting,
+  upsertSetting,
+  saveWritingPromptHistory,
+  getWritingPromptHistory,
+  upsertAnalysisGap,
+  getLatestAnalysisGaps,
+  getLatestPromptSuggestions,
 } from "../db/ai-queries.js";
 import fs from "fs";
 import path from "path";
@@ -520,6 +527,7 @@ describe("AI queries", () => {
         top_performer_post_id: "top-post",
         top_performer_reason: "Highest engagement",
         quick_insights: JSON.stringify(["insight1", "insight2"]),
+        prompt_suggestions_json: null,
       });
       const overview = getLatestOverview(db);
       expect(overview).not.toBeNull();
@@ -545,6 +553,7 @@ describe("AI queries", () => {
         top_performer_post_id: "top-post",
         top_performer_reason: "r",
         quick_insights: "[]",
+        prompt_suggestions_json: null,
       });
       upsertOverview(db, {
         run_id: runId,
@@ -552,6 +561,7 @@ describe("AI queries", () => {
         top_performer_post_id: "top-post",
         top_performer_reason: "r2",
         quick_insights: "[]",
+        prompt_suggestions_json: null,
       });
       const overview = getLatestOverview(db);
       expect(overview!.summary_text).toBe("Updated");
@@ -695,6 +705,134 @@ describe("AI queries", () => {
       expect(changelog.reversed[0].claim).toBe("Reversed claim");
       expect(changelog.retired.length).toBeGreaterThanOrEqual(1);
       expect(changelog.retired[0].claim).toBe("Retired claim");
+    });
+  });
+
+  // ── settings ─────────────────────────────────────────────
+
+  describe("settings table", () => {
+    it("returns null for missing key", () => {
+      expect(getSetting(db, "nonexistent")).toBeNull();
+    });
+
+    it("upserts and retrieves a setting", () => {
+      upsertSetting(db, "timezone", "America/New_York");
+      expect(getSetting(db, "timezone")).toBe("America/New_York");
+      upsertSetting(db, "timezone", "America/Los_Angeles");
+      expect(getSetting(db, "timezone")).toBe("America/Los_Angeles");
+    });
+  });
+
+  // ── writing_prompt_history ────────────────────────────────
+
+  describe("writing_prompt_history", () => {
+    it("saves and retrieves history entries in reverse chronological order", () => {
+      saveWritingPromptHistory(db, {
+        prompt_text: "Prompt A",
+        source: "manual_edit",
+        evidence: null,
+      });
+      saveWritingPromptHistory(db, {
+        prompt_text: "Prompt B",
+        source: "ai_suggestion",
+        evidence: "3 top posts used question hooks",
+      });
+      const history = getWritingPromptHistory(db);
+      expect(history.length).toBeGreaterThanOrEqual(2);
+      expect(history[0].prompt_text).toBe("Prompt B");
+      expect(history[0].source).toBe("ai_suggestion");
+      expect(history[1].prompt_text).toBe("Prompt A");
+    });
+  });
+
+  // ── prompt suggestions ───────────────────────────────────
+
+  describe("getLatestPromptSuggestions", () => {
+    it("returns null when no completed run exists", () => {
+      expect(getLatestPromptSuggestions(db)).toBeNull();
+    });
+
+    it("returns null when prompt_suggestions_json is null", () => {
+      const runId = createRun(db, "manual", 5);
+      completeRun(db, runId, { input_tokens: 100, output_tokens: 50, cost_cents: 0.1 });
+      upsertOverview(db, {
+        run_id: runId,
+        summary_text: "summary",
+        top_performer_post_id: null,
+        top_performer_reason: null,
+        quick_insights: "[]",
+        prompt_suggestions_json: null,
+      });
+      expect(getLatestPromptSuggestions(db)).toBeNull();
+    });
+
+    it("returns parsed prompt suggestions from latest completed run", () => {
+      const suggestions: import("../db/ai-queries.js").PromptSuggestions = {
+        assessment: "suggest_changes",
+        reasoning: "Top posts use question hooks but current prompt does not",
+        suggestions: [
+          {
+            current: "Write a professional post",
+            suggested: "Start with a question hook",
+            evidence: "3 of top 5 posts used question hooks",
+          },
+        ],
+      };
+      const runId = createRun(db, "manual", 5);
+      completeRun(db, runId, { input_tokens: 100, output_tokens: 50, cost_cents: 0.1 });
+      upsertOverview(db, {
+        run_id: runId,
+        summary_text: "summary",
+        top_performer_post_id: null,
+        top_performer_reason: null,
+        quick_insights: "[]",
+        prompt_suggestions_json: JSON.stringify(suggestions),
+      });
+      const result = getLatestPromptSuggestions(db);
+      expect(result).not.toBeNull();
+      expect(result!.assessment).toBe("suggest_changes");
+      expect(result!.reasoning).toBe("Top posts use question hooks but current prompt does not");
+      expect(result!.suggestions).toHaveLength(1);
+      expect(result!.suggestions[0].current).toBe("Write a professional post");
+    });
+  });
+
+  // ── ai_analysis_gaps ─────────────────────────────────────
+
+  describe("ai_analysis_gaps", () => {
+    it("inserts a gap and retrieves it", () => {
+      upsertAnalysisGap(db, {
+        run_id: null,
+        gap_type: "data_gap",
+        stable_key: "missing_post_content",
+        description: "49 posts have no text content",
+        impact: "Cannot analyze writing style or topic",
+      });
+      const gaps = getLatestAnalysisGaps(db);
+      const gap = gaps.find((g) => g.stable_key === "missing_post_content");
+      expect(gap).toBeDefined();
+      expect(gap!.times_flagged).toBe(1);
+    });
+
+    it("increments times_flagged on duplicate stable_key", () => {
+      upsertAnalysisGap(db, {
+        run_id: null,
+        gap_type: "data_gap",
+        stable_key: "missing_post_content",
+        description: "49 posts have no text content",
+        impact: "Cannot analyze writing style or topic",
+      });
+      upsertAnalysisGap(db, {
+        run_id: null,
+        gap_type: "data_gap",
+        stable_key: "missing_post_content",
+        description: "Updated description",
+        impact: "Updated impact",
+      });
+      const gaps = getLatestAnalysisGaps(db);
+      const gap = gaps.find((g) => g.stable_key === "missing_post_content");
+      expect(gap!.times_flagged).toBe(2);
+      expect(gap!.description).toBe("Updated description");
     });
   });
 });
