@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .superpowers/
+.worktrees/
 .env
 
 # User data — DB, images, author photo, backups
