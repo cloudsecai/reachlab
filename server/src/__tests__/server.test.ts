@@ -581,6 +581,22 @@ describe("GET /api/images/:postId/:index", () => {
     expect(response.statusCode).toBe(404);
   });
 
+  it("rejects path traversal attempts", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/images/..%2F..%2Fetc/0",
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("rejects non-numeric index", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/images/some-post/abc",
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it("serves image when it exists", async () => {
     // Create a test image file in the expected location
     const dataDir = path.join(path.dirname(TEST_DB_PATH), "images");

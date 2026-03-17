@@ -202,8 +202,19 @@ export function buildApp(dbPath: string) {
   // Serve post images
   app.get("/api/images/:postId/:index", async (request, reply) => {
     const { postId, index } = request.params as { postId: string; index: string };
-    const dataDir = path.join(path.dirname(dbPath), "images");
-    const imagePath = path.join(dataDir, postId, `${index}.jpg`);
+
+    // Validate params to prevent path traversal
+    if (!/^[\w:.-]+$/.test(postId) || !/^\d+$/.test(index)) {
+      return reply.status(400).send({ error: "Invalid path" });
+    }
+
+    const dataDir = path.resolve(path.dirname(dbPath), "images");
+    const imagePath = path.resolve(dataDir, postId, `${index}.jpg`);
+
+    // Containment check
+    if (!imagePath.startsWith(dataDir + path.sep)) {
+      return reply.status(400).send({ error: "Invalid path" });
+    }
 
     if (!fs.existsSync(imagePath)) {
       return reply.status(404).send({ error: "Image not found" });
