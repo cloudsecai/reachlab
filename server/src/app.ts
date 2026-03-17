@@ -298,7 +298,7 @@ export function buildApp(dbPath: string) {
     }
   );
   const dataDir = path.dirname(dbPath);
-  registerSettingsRoutes(app, dataDir);
+  registerSettingsRoutes(app, dataDir, db);
 
   // Serve dashboard static files
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
