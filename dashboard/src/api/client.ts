@@ -162,11 +162,11 @@ export const api = {
   insightsTaxonomy: () => get<{ taxonomy: TaxonomyItem[] }>("/insights/taxonomy"),
   insightsRefresh: () =>
     fetch(`${BASE_URL}/insights/refresh`, { method: "POST" }).then((r) => r.json()),
-  recommendationFeedback: (id: number, feedback: string) =>
+  recommendationFeedback: (id: number, rating: string, reason?: string) =>
     fetch(`${BASE_URL}/insights/recommendations/${id}/feedback`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feedback }),
+      body: JSON.stringify({ feedback: { rating, reason: reason || null } }),
     }).then((r) => r.json()),
   authorPhoto: () =>
     fetch(`${BASE_URL}/settings/author-photo`).then((r) =>

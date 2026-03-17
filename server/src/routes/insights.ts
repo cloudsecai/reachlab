@@ -54,7 +54,7 @@ export function registerInsightsRoutes(app: FastifyInstance, db: Database.Databa
 
   app.patch("/api/insights/recommendations/:id/feedback", async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = request.body as { feedback?: string; acted_on?: boolean };
+    const body = request.body as { feedback?: string | { rating: string; reason?: string }; acted_on?: boolean };
     if (!body.feedback && body.acted_on === undefined) {
       return reply.status(400).send({ error: "Provide feedback or acted_on" });
     }
@@ -63,7 +63,11 @@ export function registerInsightsRoutes(app: FastifyInstance, db: Database.Databa
       return reply.status(404).send({ error: "Recommendation not found" });
     }
     if (body.feedback) {
-      updateRecommendationFeedback(db, Number(id), body.feedback);
+      // Accept both plain string and JSON object with { rating, reason }
+      const feedbackStr = typeof body.feedback === "object"
+        ? JSON.stringify(body.feedback)
+        : JSON.stringify({ rating: body.feedback, reason: null });
+      updateRecommendationFeedback(db, Number(id), feedbackStr);
     }
     if (body.acted_on !== undefined) {
       db.prepare("UPDATE recommendations SET acted_on = ?, acted_on_at = CURRENT_TIMESTAMP WHERE id = ?")

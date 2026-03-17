@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { buildApp } from "../app.js";
 import type { FastifyInstance } from "fastify";
+import BetterSqlite3 from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 
 const TEST_DB_PATH = path.join(import.meta.dirname, "../../data/test-insights-routes.db");
 
 let app: FastifyInstance;
+let db: BetterSqlite3.Database;
 
 beforeAll(async () => {
   app = buildApp(TEST_DB_PATH);
   await app.ready();
+  db = new BetterSqlite3(TEST_DB_PATH);
 
   // Seed posts with metrics for a realistic scenario
   await app.inject({
@@ -35,6 +38,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  db.close();
   await app.close();
   try {
     fs.unlinkSync(TEST_DB_PATH);
@@ -109,6 +113,45 @@ describe("PATCH /api/insights/recommendations/:id/feedback", () => {
       payload: { feedback: "useful" },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it("accepts JSON feedback with reason", async () => {
+    db.prepare("INSERT INTO ai_runs (triggered_by, status, post_count) VALUES ('test', 'completed', 15)").run();
+    const runId = (db.prepare("SELECT MAX(id) as id FROM ai_runs").get() as { id: number }).id;
+    db.prepare(
+      "INSERT INTO recommendations (run_id, type, priority, confidence, headline, detail, action, evidence_json) VALUES (?, 'quick_win', 1, 0.9, 'Test Rec', 'Detail', 'Action', '[]')"
+    ).run(runId);
+    const recId = (db.prepare("SELECT MAX(id) as id FROM recommendations").get() as { id: number }).id;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/insights/recommendations/${recId}/feedback`,
+      payload: {
+        feedback: { rating: "useful", reason: "Very specific and actionable" },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const rec = db.prepare("SELECT feedback FROM recommendations WHERE id = ?").get(recId) as { feedback: string };
+    const feedback = JSON.parse(rec.feedback);
+    expect(feedback.rating).toBe("useful");
+    expect(feedback.reason).toBe("Very specific and actionable");
+  });
+
+  it("wraps plain string feedback as JSON", async () => {
+    const recId = (db.prepare("SELECT MAX(id) as id FROM recommendations").get() as { id: number }).id;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/insights/recommendations/${recId}/feedback`,
+      payload: { feedback: "not_useful" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const rec = db.prepare("SELECT feedback FROM recommendations WHERE id = ?").get(recId) as { feedback: string };
+    const feedback = JSON.parse(rec.feedback);
+    expect(feedback.rating).toBe("not_useful");
+    expect(feedback.reason).toBeNull();
   });
 });
 

@@ -41,6 +41,8 @@ export default function Coach() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [changelog, setChangelog] = useState<Changelog | null>(null);
   const [feedbackMap, setFeedbackMap] = useState<Record<number, string>>({});
+  const [reasonMap, setReasonMap] = useState<Record<number, string>>({});
+  const [showReasonFor, setShowReasonFor] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = () => {
@@ -49,10 +51,17 @@ export default function Coach() {
       .then((r) => {
         setRecommendations(r.recommendations);
         setInsights(r.insights);
-        // Initialize feedback state from existing data
+        // Initialize feedback state from existing data (may be JSON or plain string)
         const fb: Record<number, string> = {};
         for (const rec of r.recommendations) {
-          if (rec.feedback) fb[rec.id] = rec.feedback;
+          if (rec.feedback) {
+            try {
+              const parsed = JSON.parse(rec.feedback);
+              fb[rec.id] = parsed.rating ?? rec.feedback;
+            } catch {
+              fb[rec.id] = rec.feedback;
+            }
+          }
         }
         setFeedbackMap(fb);
       })
@@ -75,7 +84,16 @@ export default function Coach() {
 
   const handleFeedback = (id: number, feedback: string) => {
     setFeedbackMap((prev) => ({ ...prev, [id]: feedback }));
+    setShowReasonFor(id);
     api.recommendationFeedback(id, feedback).catch(() => {});
+  };
+
+  const handleReasonSubmit = (id: number) => {
+    const reason = reasonMap[id];
+    if (reason?.trim()) {
+      api.recommendationFeedback(id, feedbackMap[id], reason).catch(() => {});
+    }
+    setShowReasonFor(null);
   };
 
   const changelogSections: { key: keyof Changelog; label: string; color: string }[] = [
@@ -194,27 +212,64 @@ export default function Coach() {
               )}
 
               {/* Feedback buttons */}
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  onClick={() => handleFeedback(rec.id, "useful")}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                    feedbackMap[rec.id] === "useful"
-                      ? "bg-positive/15 text-positive"
-                      : "bg-surface-2 text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  Useful
-                </button>
-                <button
-                  onClick={() => handleFeedback(rec.id, "not_useful")}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                    feedbackMap[rec.id] === "not_useful"
-                      ? "bg-negative/15 text-negative"
-                      : "bg-surface-2 text-text-muted hover:text-text-primary"
-                  }`}
-                >
-                  Not useful
-                </button>
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleFeedback(rec.id, "useful")}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      feedbackMap[rec.id] === "useful"
+                        ? "bg-positive/15 text-positive"
+                        : "bg-surface-2 text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    Useful
+                  </button>
+                  <button
+                    onClick={() => handleFeedback(rec.id, "not_useful")}
+                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                      feedbackMap[rec.id] === "not_useful"
+                        ? "bg-negative/15 text-negative"
+                        : "bg-surface-2 text-text-muted hover:text-text-primary"
+                    }`}
+                  >
+                    Not useful
+                  </button>
+                </div>
+
+                {/* Reason input — slides open after feedback */}
+                {showReasonFor === rec.id && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder={
+                        feedbackMap[rec.id] === "useful"
+                          ? "Why was this helpful?"
+                          : "What would make this more useful?"
+                      }
+                      value={reasonMap[rec.id] || ""}
+                      onChange={(e) =>
+                        setReasonMap((prev) => ({ ...prev, [rec.id]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleReasonSubmit(rec.id);
+                      }}
+                      className="flex-1 bg-surface-2 border border-border rounded px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleReasonSubmit(rec.id)}
+                      className="px-2 py-1.5 rounded text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20"
+                    >
+                      Send
+                    </button>
+                    <button
+                      onClick={() => setShowReasonFor(null)}
+                      className="px-2 py-1.5 rounded text-xs text-text-muted hover:text-text-primary"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
