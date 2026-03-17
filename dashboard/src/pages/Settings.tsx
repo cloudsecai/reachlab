@@ -4,10 +4,31 @@ import { api } from "../api/client";
 export default function Settings() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  const [promptText, setPromptText] = useState<string>("");
+  const [promptSaved, setPromptSaved] = useState(false);
+  const [promptHistory, setPromptHistory] = useState<import("../api/client").WritingPromptHistory[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
 
   useEffect(() => {
     api.authorPhoto().then(setPhotoUrl).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/settings/author-photo")
+      .then((r) => {
+        if (r.ok) setPhotoPreviewUrl(`/api/settings/author-photo?t=${Date.now()}`);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.getWritingPrompt().then((r) => setPromptText(r.text ?? "")).catch(() => {});
+    api.getWritingPromptHistory().then((r) => setPromptHistory(r.history)).catch(() => {});
   }, []);
 
   // Revoke previous blob URL whenever photoUrl changes or on unmount
@@ -47,9 +68,43 @@ export default function Settings() {
     }
   };
 
+  const handlePhotoUpload = async (file: File) => {
+    setPhotoError(null);
+    try {
+      const res = await fetch("/api/settings/author-photo", {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setPhotoError((err as any).error ?? "Upload failed");
+        return;
+      }
+      setPhotoPreviewUrl(`/api/settings/author-photo?t=${Date.now()}`);
+    } catch {
+      setPhotoError("Upload failed — check your connection");
+    }
+  };
+
   const handleDelete = async () => {
     await api.deleteAuthorPhoto();
     setPhotoUrl(null);
+  };
+
+  const handleSavePrompt = async () => {
+    setPromptLoading(true);
+    try {
+      await api.saveWritingPrompt(promptText, "manual_edit");
+      const histRes = await api.getWritingPromptHistory();
+      setPromptHistory(histRes.history);
+      setPromptSaved(true);
+      setTimeout(() => setPromptSaved(false), 2000);
+    } catch {
+      // silent
+    } finally {
+      setPromptLoading(false);
+    }
   };
 
   return (
@@ -100,6 +155,13 @@ export default function Settings() {
           </button>
         )}
 
+        {photoPreviewUrl && (
+          <img src={photoPreviewUrl} alt="Author photo preview" className="w-16 h-16 rounded-full object-cover" />
+        )}
+        {photoError && (
+          <p className="text-xs text-negative">{photoError}</p>
+        )}
+
         <input
           ref={fileInput}
           type="file"
@@ -107,6 +169,72 @@ export default function Settings() {
           onChange={handleUpload}
           className="hidden"
         />
+      </div>
+
+      {/* Writing Prompt */}
+      <div className="bg-surface-1 border border-border rounded-lg p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-medium text-text-primary mb-1">LinkedIn Writing Prompt</h3>
+          <p className="text-xs text-text-muted">
+            The prompt or guidelines you use when writing LinkedIn posts. The AI Coach uses this
+            to suggest improvements based on your performance data.
+          </p>
+        </div>
+
+        <textarea
+          value={promptText}
+          onChange={(e) => setPromptText(e.target.value)}
+          rows={6}
+          placeholder="e.g. Always start with a compelling question. Use short paragraphs. End with a call to action..."
+          className="w-full bg-surface-2 border border-border rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent resize-none"
+        />
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSavePrompt}
+            disabled={promptLoading}
+            className="px-4 py-2 rounded-md text-sm font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+          >
+            {promptLoading ? "Saving..." : promptSaved ? "Saved" : "Save Prompt"}
+          </button>
+        </div>
+
+        {/* Revision History */}
+        {promptHistory.length > 0 && (
+          <div className="space-y-2">
+            <button
+              onClick={() => setHistoryOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-primary transition-colors"
+            >
+              <span className={`transition-transform ${historyOpen ? "rotate-90" : ""}`}>&#9654;</span>
+              Revision history ({promptHistory.length})
+            </button>
+            {historyOpen && (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {promptHistory.map((h) => (
+                  <div key={h.id} className="bg-surface-2 rounded-md px-3 py-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-muted">
+                        {new Date(h.created_at).toLocaleString()}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        h.source === "ai_suggestion"
+                          ? "bg-accent/10 text-accent"
+                          : "bg-surface-3 text-text-muted"
+                      }`}>
+                        {h.source === "ai_suggestion" ? "AI suggestion" : "Manual edit"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary line-clamp-3">{h.prompt_text}</p>
+                    {h.suggestion_evidence && (
+                      <p className="text-xs text-text-muted italic">{h.suggestion_evidence}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

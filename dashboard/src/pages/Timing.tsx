@@ -28,15 +28,35 @@ export default function Timing() {
     }
   }
 
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const medianERByDay: { day: string; er: number }[] = [];
+  for (const day of [0, 1, 2, 3, 4, 5, 6]) {
+    const daySlots = slots.filter((s) => s.day === day && s.avg_engagement_rate != null);
+    if (daySlots.length === 0) continue;
+    const rates = daySlots.map((s) => s.avg_engagement_rate!).sort((a, b) => a - b);
+    const mid = Math.floor(rates.length / 2);
+    const med = rates.length % 2 === 0 ? (rates[mid - 1]! + rates[mid]!) / 2 : rates[mid]!;
+    medianERByDay.push({ day: DAY_NAMES[day]!, er: med });
+  }
+  const overallMedian =
+    medianERByDay.length > 0
+      ? medianERByDay.map((d) => d.er).sort((a, b) => a - b)[
+          Math.floor(medianERByDay.length / 2)
+        ]!
+      : 0;
+  const bestDays = medianERByDay
+    .filter((d) => d.er > overallMedian)
+    .sort((a, b) => b.er - a.er)
+    .slice(0, 3)
+    .map((d) => d.day);
+
   function cellColor(slot: TimingSlot | undefined): string {
-    if (!slot || slot.avg_engagement_rate == null || maxRate === 0) {
-      return "bg-surface-1";
-    }
+    if (!slot || slot.avg_engagement_rate == null || maxRate === 0) return "bg-surface-1";
     const intensity = slot.avg_engagement_rate / maxRate;
-    if (intensity > 0.75) return "bg-accent";
-    if (intensity > 0.5) return "bg-accent/60";
-    if (intensity > 0.25) return "bg-accent/30";
-    return "bg-accent/10";
+    if (intensity > 0.75) return "bg-positive";
+    if (intensity > 0.5) return "bg-positive/60";
+    if (intensity > 0.25) return "bg-positive/30";
+    return "bg-positive/10";
   }
 
   return (
@@ -47,6 +67,11 @@ export default function Timing() {
           Color intensity shows average engagement rate for posts published at
           each day/hour
         </p>
+        {bestDays.length > 0 && (
+          <p className="text-sm text-accent font-medium">
+            Your strongest days: {bestDays.join(", ")}
+          </p>
+        )}
       </div>
 
       {slots.length === 0 ? (
@@ -105,10 +130,10 @@ export default function Timing() {
           <div className="flex items-center gap-3 mt-4 text-xs text-text-muted">
             <span>Low</span>
             <div className="flex gap-1">
-              <div className="w-4 h-4 rounded-sm bg-accent/10" />
-              <div className="w-4 h-4 rounded-sm bg-accent/30" />
-              <div className="w-4 h-4 rounded-sm bg-accent/60" />
-              <div className="w-4 h-4 rounded-sm bg-accent" />
+              <div className="w-4 h-4 rounded-sm bg-positive/10" />
+              <div className="w-4 h-4 rounded-sm bg-positive/30" />
+              <div className="w-4 h-4 rounded-sm bg-positive/60" />
+              <div className="w-4 h-4 rounded-sm bg-positive" />
             </div>
             <span>High engagement</span>
           </div>

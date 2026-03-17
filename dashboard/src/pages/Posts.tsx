@@ -35,6 +35,14 @@ export default function Posts() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricSnapshot[]>([]);
+  const [backfillCount, setBackfillCount] = useState<number>(0);
+
+  useEffect(() => {
+    fetch("/api/posts/needs-content")
+      .then((r) => r.json())
+      .then((r) => setBackfillCount(r.post_ids?.length ?? 0))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const params: Record<string, string | number> = {
@@ -78,6 +86,12 @@ export default function Posts() {
 
   return (
     <div className="space-y-4">
+      {backfillCount > 0 && (
+        <div className="bg-accent/5 border border-accent/20 rounded-md px-4 py-2.5 text-sm text-text-secondary flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />
+          Content pending for {backfillCount} post{backfillCount !== 1 ? "s" : ""} — open LinkedIn with the extension active to backfill.
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-semibold">Posts</h2>
         <div className="flex gap-2">
