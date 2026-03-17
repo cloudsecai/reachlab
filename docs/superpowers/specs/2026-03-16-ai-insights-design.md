@@ -71,10 +71,16 @@ CREATE TABLE ai_taxonomy (
   version INTEGER DEFAULT 1
 );
 
--- Per-post AI tags
+-- Junction table for post-topic relationships (enables clean taxonomy re-mapping)
+CREATE TABLE ai_post_topics (
+  post_id TEXT NOT NULL REFERENCES posts(id),
+  taxonomy_id INTEGER NOT NULL REFERENCES ai_taxonomy(id),
+  PRIMARY KEY (post_id, taxonomy_id)
+);
+
+-- Per-post AI tags (non-topic dimensions)
 CREATE TABLE ai_tags (
   post_id TEXT PRIMARY KEY REFERENCES posts(id),
-  topics TEXT NOT NULL,           -- JSON array of taxonomy IDs
   hook_type TEXT NOT NULL,        -- contrarian|story|question|statistic|listicle|observation|how-to|social-proof|vulnerable|none
   tone TEXT NOT NULL,             -- educational|inspirational|conversational|provocative|analytical|humorous|vulnerable
   format_style TEXT NOT NULL,     -- short-punchy|medium-structured|long-narrative|long-educational
@@ -92,7 +98,8 @@ CREATE TABLE ai_runs (
   completed_at DATETIME,
   total_input_tokens INTEGER,
   total_output_tokens INTEGER,
-  total_cost_cents REAL
+  total_cost_cents REAL,
+  error TEXT                     -- error message if status = 'failed'
 );
 
 -- Persisted insights with lineage
@@ -100,6 +107,7 @@ CREATE TABLE insights (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   run_id INTEGER NOT NULL REFERENCES ai_runs(id),
   category TEXT NOT NULL,         -- 'topic_performance' | 'compound_pattern' | 'format_insight' | 'timing' | 'trend' | 'hidden_opportunity'
+  stable_key TEXT NOT NULL,       -- LLM-assigned stable identifier for cross-run matching (e.g. 'topic:hiring:positive', 'compound:story+contrarian')
   claim TEXT NOT NULL,
   evidence TEXT NOT NULL,          -- JSON: sample sizes, values, breakdowns, SQL queries used
   confidence TEXT NOT NULL,        -- 'strong' | 'moderate' | 'weak' | 'insufficient'
@@ -174,7 +182,7 @@ CREATE TABLE ai_logs (
 
 **Output**: 5-15 topic categories at the right granularity for the creator's actual content. Stored in `ai_taxonomy`.
 
-**Re-discovery**: Preserves continuity — merge/split/rename existing categories, don't restart from scratch. Old tag mappings updated.
+**Re-discovery**: Preserves continuity — merge/split/rename existing categories, don't restart from scratch. The Opus prompt receives the current taxonomy and outputs a migration plan: which IDs to keep, merge, split, or rename. Code applies the migration by updating `ai_post_topics` rows (simple UPDATE/DELETE on a junction table, no JSON parsing needed).
 
 ### 4.2 Post Tagging (Haiku, incremental)
 
@@ -222,7 +230,7 @@ Critical: confounded findings are still reported with the confounder identified 
 
 Input: Verified findings + uncertainty framework + feedback history.
 
-**Self-consistency**: Run 3 independent recommendation generations, keep findings appearing in 2+ of 3 runs. Cost: ~$0.21 total.
+**Self-consistency**: Run 3 independent recommendation generations. Each recommendation includes a structured `key` field (e.g. `topic:hiring:opportunity`, `format:carousel:suggestion`). After all 3 runs, code groups recommendations by key and keeps those appearing in 2+ of 3 runs. For kept recommendations, the version with the richest detail is selected. Cost: ~$0.21 total.
 
 **Evidence strength labels** (NOT percentages — research shows LLMs cluster at 80-100% regardless):
 - **STRONG**: Pattern consistent across subgroups, large effect, confounders ruled out
@@ -249,14 +257,15 @@ Input: Verified findings + uncertainty framework + feedback history.
 
 ### 4.4 Insight Lineage
 
-Each analysis run links new insights to predecessors:
+**Cross-run matching**: Each insight has a `stable_key` — a structured identifier assigned by the LLM via the `submit_analysis` tool (e.g. `topic:hiring:positive`, `compound:story+contrarian:positive`). The Stage 2 prompt receives all active insights from the previous run with their stable keys. The LLM is instructed to reuse existing keys when the same pattern is found, or create new keys for genuinely new patterns. Code matches new insights to predecessors by `stable_key`, then records the relationship:
+
 - **CONFIRMED**: Same pattern, consistent evidence (consecutive_appearances++)
 - **STRENGTHENED**: Same pattern, stronger evidence or larger sample
 - **WEAKENED**: Same pattern but effect size decreasing or confounders emerging
 - **REVERSED**: Previous insight no longer holds
 - **SUPERSEDED**: New insight replaces old with better explanation
 
-Insights that persist across 5+ runs are flagged as highly reliable. Insights that appeared once may be noise.
+Insights that persist across 5+ runs are flagged as highly reliable. Insights that appeared once may be noise. Active insights from the previous run that are NOT matched by any new insight are marked `status = 'retired'`.
 
 ### 4.5 Overview Summary Generation
 
@@ -264,6 +273,8 @@ After analysis completes, a lightweight Haiku call generates:
 - Natural-language summary sentence ("Your engagement rate hit a 30-day high this week...")
 - Top performer identification with one-line explanation
 - 2-3 quick insights pulled from the analysis
+
+**Top performer selection**: Pre-computed in code before the Haiku call. Rank posts from the last 30 days by weighted engagement score (`comments*5 + shares*3 + saves*3 + sends*3 + reactions*1`), pick the highest. The post ID and its metrics are passed to Haiku, which generates the "why it worked" explanation using the post's AI tags.
 
 Cached in `ai_overview`, served directly to the Overview tab.
 
@@ -284,11 +295,19 @@ All insight endpoints return cached data from SQLite. No LLM calls on read.
 
 ## 6. Trigger & Caching Strategy
 
-**Auto-trigger**: After each successful `/api/ingest` sync, if 3+ new posts since last analysis run.
+**Minimum threshold**: The analysis pipeline (Stages 1-3) requires at least 10 posts with metrics in the database. Tagging (Haiku) can run with fewer posts. If below threshold, the dashboard shows a message: "Need 10+ posts to generate insights. Keep syncing!"
+
+**Auto-trigger**: After each successful `/api/ingest` sync, if 3+ new posts since last analysis run AND total posts >= 10.
+
+**Concurrent run prevention**: `POST /api/insights/refresh` checks for `ai_runs` with `status = 'running'`. If one exists, return 409 with the run's start time. Only one analysis pipeline runs at a time.
 
 **Staleness check**: Compare post count in latest `ai_runs` vs actual post count. Also check if any posts lack tags.
 
 **No LLM calls on page load**: Dashboard always reads from cache. "Refresh" button triggers a new run.
+
+**Error handling**: Each pipeline stage commits its results independently. If tagging succeeds but analysis fails, the tags are kept. A failed run (`status = 'failed'`) does NOT overwrite the previous successful run's cached data — the dashboard always shows the latest completed run. The `ai_runs` row stores error details in a `error TEXT` column. No automatic retry; the user can manually trigger a refresh.
+
+**Query safety for `query_db` tool**: The tool enforces a 5-second query timeout, appends `LIMIT 100` to all queries (regardless of what the LLM writes), and restricts access to these tables only: `posts`, `post_metrics`, `follower_snapshots`, `profile_snapshots`, `ai_tags`, `ai_post_topics`, `ai_taxonomy`. The `ai_logs` table is excluded (could be very large).
 
 **Cost control**: ~$0.45-0.80 per full analysis run. Monthly at daily syncs: ~$5-14.
 
@@ -326,6 +345,8 @@ server/src/
 - **Quick insights**: 2-3 bullet points pulled from AI analysis
 
 **Weighted engagement formula**: `(Comments×5 + Shares×3 + Saves×3 + Sends×3 + Reactions×1) / Impressions`
+
+Note: The existing `queryOverview` function uses unweighted `(reactions + comments + reposts) / impressions`. The Overview tab will show the new weighted metric as the primary KPI, and the existing unweighted rate as a secondary/tooltip value. The Posts list keeps the unweighted rate for consistency with what LinkedIn shows natively.
 
 ### 8.2 Coach Tab (New)
 
