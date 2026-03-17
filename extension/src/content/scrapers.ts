@@ -192,8 +192,15 @@ export function scrapePostPage(doc: Document): ScrapedPostContent {
     const textSpan = textContainer.querySelector(".break-words");
     if (textSpan) {
       hookText = textSpan.textContent?.trim() || null;
+      // Preserve paragraph breaks: replace <br> tags with newlines, then get text
+      const clone = textSpan.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+      // Also treat block-level elements as paragraph breaks
+      clone.querySelectorAll("p, div").forEach((el) => {
+        el.insertAdjacentText("beforebegin", "\n");
+      });
+      fullText = clone.textContent?.trim().replace(/\n{3,}/g, "\n\n") || null;
     }
-    fullText = hookText; // Will be updated after "see more" click by service worker
   }
 
   // Extract image URLs — look for LinkedIn CDN images in the post

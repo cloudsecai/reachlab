@@ -239,7 +239,10 @@ export default function Posts() {
                           <div className="flex-1 min-w-0">
                             {selectedPost.full_text ? (
                               <div className="text-sm text-text-primary leading-relaxed space-y-2 max-h-64 overflow-y-auto pr-2">
-                                {selectedPost.full_text.split(/(?:\n\n|\n(?=[A-Z]))/).map((para, i) => (
+                                {(selectedPost.full_text.includes("\n")
+                                  ? selectedPost.full_text.split(/\n+/)
+                                  : selectedPost.full_text.split(/(?<=[.!?"])(?=[A-Z])/)
+                                ).filter(Boolean).map((para, i) => (
                                   <p key={i}>{para}</p>
                                 ))}
                               </div>
