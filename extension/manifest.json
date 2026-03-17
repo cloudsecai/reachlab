@@ -6,17 +6,17 @@
   "permissions": ["alarms", "cookies", "storage", "tabs", "webNavigation"],
   "host_permissions": ["*://*.linkedin.com/*", "http://localhost:3210/*"],
   "background": {
-    "service_worker": "src/background/service-worker.ts",
+    "service_worker": "background/service-worker.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.linkedin.com/*"],
-      "js": ["src/content/index.ts"],
+      "matches": ["*://*.linkedin.com/analytics/*"],
+      "js": ["content/index.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "src/popup/popup.html"
+    "default_popup": "popup/popup.html"
   }
 }
