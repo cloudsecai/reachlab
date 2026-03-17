@@ -18,11 +18,13 @@ function fmtPct(n: number | null | undefined): string {
 function pctChange(
   current: number | null | undefined,
   previous: number | null | undefined,
+  rangeDays: number,
 ): string | null {
+  if (rangeDays === 0) return null; // "All" — no meaningful comparison
   if (current == null || previous == null || previous === 0) return null;
   const delta = ((current - previous) / previous) * 100;
   const sign = delta >= 0 ? "+" : "";
-  return `${sign}${delta.toFixed(1)}% vs prior`;
+  return `${sign}${delta.toFixed(1)}% vs prev ${rangeDays}d`;
 }
 
 export default function Overview() {
@@ -132,6 +134,7 @@ export default function Overview() {
           subtitle={pctChange(
             overview?.total_impressions,
             prevOverview?.total_impressions,
+            range,
           )}
         />
         <KPICard
@@ -140,6 +143,7 @@ export default function Overview() {
           subtitle={pctChange(
             overview?.avg_engagement_rate,
             prevOverview?.avg_engagement_rate,
+            range,
           )}
         />
         <KPICard
@@ -148,6 +152,7 @@ export default function Overview() {
           subtitle={pctChange(
             overview?.total_followers,
             prevOverview?.total_followers,
+            range,
           )}
         />
         <KPICard
@@ -156,6 +161,7 @@ export default function Overview() {
           subtitle={pctChange(
             overview?.profile_views,
             prevOverview?.profile_views,
+            range,
           )}
         />
       </div>
@@ -170,6 +176,16 @@ export default function Overview() {
             <p className="text-sm text-text-primary leading-relaxed">
               {aiOverview.top_performer_reason}
             </p>
+            {aiOverview.top_performer_post_id && (
+              <a
+                href={`https://www.linkedin.com/feed/update/urn:li:activity:${aiOverview.top_performer_post_id}/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:underline mt-2 inline-block"
+              >
+                View post on LinkedIn
+              </a>
+            )}
           </div>
         )}
 
