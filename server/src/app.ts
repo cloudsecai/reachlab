@@ -1,5 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 import { initDatabase } from "./db/index.js";
 import {
   upsertPost,
@@ -193,6 +197,24 @@ export function buildApp(dbPath: string) {
     const snapshots = queryProfile(db);
     return { snapshots };
   });
+
+  // Serve dashboard static files
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const dashboardDir = path.join(__dirname, "../../dashboard/dist");
+  if (fs.existsSync(dashboardDir)) {
+    app.register(fastifyStatic, {
+      root: dashboardDir,
+      prefix: "/",
+      wildcard: false,
+    });
+    // SPA fallback — serve index.html for non-API routes
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith("/api/")) {
+        return reply.status(404).send({ error: "Not found" });
+      }
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
 }
