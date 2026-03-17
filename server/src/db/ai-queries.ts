@@ -336,12 +336,13 @@ export function upsertOverview(
   db: Database.Database,
   input: OverviewInput
 ): void {
-  // Delete existing overview for this run, then insert
-  db.prepare("DELETE FROM ai_overview WHERE run_id = ?").run(input.run_id);
-  db.prepare(
-    `INSERT INTO ai_overview (run_id, summary_text, top_performer_post_id, top_performer_reason, quick_insights)
-     VALUES (@run_id, @summary_text, @top_performer_post_id, @top_performer_reason, @quick_insights)`
-  ).run(input);
+  db.transaction(() => {
+    db.prepare("DELETE FROM ai_overview WHERE run_id = ?").run(input.run_id);
+    db.prepare(
+      `INSERT INTO ai_overview (run_id, summary_text, top_performer_post_id, top_performer_reason, quick_insights)
+       VALUES (@run_id, @summary_text, @top_performer_post_id, @top_performer_reason, @quick_insights)`
+    ).run(input);
+  })();
 }
 
 export function getLatestOverview(db: Database.Database): any | null {
@@ -376,36 +377,36 @@ export function getChangelog(db: Database.Database): {
 } {
   const latestRun = getLatestCompletedRun(db);
 
+  if (!latestRun) return { confirmed: [], new_signal: [], reversed: [], retired: [] };
+
   const confirmed = db
     .prepare(
       `SELECT * FROM insights
-       WHERE status = 'active' AND consecutive_appearances > 1
+       WHERE status = 'active' AND run_id = ? AND consecutive_appearances > 1
        ORDER BY confidence DESC`
     )
-    .all();
+    .all(latestRun.id);
 
-  const new_signal = latestRun
-    ? db
-        .prepare(
-          `SELECT * FROM insights
-           WHERE status = 'active' AND first_seen_run_id = ?
-           ORDER BY confidence DESC`
-        )
-        .all(latestRun.id)
-    : [];
+  const new_signal = db
+    .prepare(
+      `SELECT * FROM insights
+       WHERE status = 'active' AND run_id = ? AND first_seen_run_id = ?
+       ORDER BY confidence DESC`
+    )
+    .all(latestRun.id, latestRun.id);
 
   const reversed = db
     .prepare(
       `SELECT * FROM insights
-       WHERE direction = 'reversed'
+       WHERE run_id = ? AND direction = 'reversed'
        ORDER BY confidence DESC`
     )
-    .all();
+    .all(latestRun.id);
 
   const retired = db
     .prepare(
       `SELECT * FROM insights
-       WHERE status = 'retired'
+       WHERE status = 'retired' AND run_id = (SELECT MAX(run_id) FROM insights WHERE status = 'retired')
        ORDER BY confidence DESC`
     )
     .all();

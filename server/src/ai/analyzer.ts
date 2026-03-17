@@ -113,10 +113,10 @@ async function buildSummary(db: Database.Database): Promise<string> {
 
   const followerRow = db
     .prepare(
-      `SELECT organic_follower_count FROM follower_snapshots
-       ORDER BY captured_at DESC LIMIT 1`
+      `SELECT total_followers FROM follower_snapshots
+       ORDER BY date DESC LIMIT 1`
     )
-    .get() as { organic_follower_count: number } | undefined;
+    .get() as { total_followers: number } | undefined;
 
   return [
     `Posts with metrics: ${postCount}`,
@@ -125,7 +125,7 @@ async function buildSummary(db: Database.Database): Promise<string> {
     `Avg reactions: ${Math.round(avgEngagement.avg_reactions ?? 0)}`,
     `Avg comments: ${Math.round(avgEngagement.avg_comments ?? 0)}`,
     `Avg reposts: ${Math.round(avgEngagement.avg_reposts ?? 0)}`,
-    `Current followers: ${followerRow?.organic_follower_count ?? "N/A"}`,
+    `Current followers: ${followerRow?.total_followers ?? "N/A"}`,
   ].join("\n");
 }
 
@@ -136,6 +136,7 @@ const MAX_TURNS = 15;
 export async function runAgentLoop(
   client: Anthropic,
   db: Database.Database,
+  queryDb: Database.Database,
   systemPrompt: string,
   userMessage: string,
   logger: AiLogger,
@@ -191,7 +192,7 @@ export async function runAgentLoop(
       for (const toolUse of toolUseBlocks) {
         if (toolUse.name === "query_db") {
           const input = toolUse.input as { sql: string };
-          const result = executeQueryDb(db, input.sql);
+          const result = executeQueryDb(queryDb, input.sql);
           toolResults.push({
             type: "tool_result",
             tool_use_id: toolUse.id,
@@ -232,6 +233,7 @@ export async function runAgentLoop(
 export async function runAnalysis(
   client: Anthropic,
   db: Database.Database,
+  queryDb: Database.Database,
   logger: AiLogger
 ): Promise<AnalysisResult | null> {
   const summary = await buildSummary(db);
@@ -243,6 +245,7 @@ export async function runAnalysis(
   const stage1Result = await runAgentLoop(
     client,
     db,
+    queryDb,
     stage1System,
     "Analyze the data and identify patterns. Use query_db to explore, then submit_analysis with your findings.",
     logger,
@@ -270,6 +273,7 @@ export async function runAnalysis(
   const stage2Result = await runAgentLoop(
     client,
     db,
+    queryDb,
     stage2System,
     "Test the hypotheses from Stage 1. Use query_db to validate, then submit_analysis with refined findings.",
     logger,
@@ -289,6 +293,7 @@ export async function runAnalysis(
     const result = await runAgentLoop(
       client,
       db,
+      queryDb,
       stage3System,
       "Synthesize findings into actionable insights and recommendations. Use query_db if needed, then submit_analysis.",
       logger,

@@ -61,12 +61,25 @@ export default function Overview() {
     api
       .insightsRefresh()
       .then(() => {
-        // Reload AI overview after refresh
-        return api.insightsOverview();
+        // Pipeline runs async — poll for results every 5s for up to 3 minutes
+        let attempts = 0;
+        const poll = () => {
+          attempts++;
+          api
+            .insightsOverview()
+            .then((r) => {
+              if (r.overview || attempts >= 36) {
+                setAiOverview(r.overview);
+                setRefreshing(false);
+              } else {
+                setTimeout(poll, 5000);
+              }
+            })
+            .catch(() => setRefreshing(false));
+        };
+        setTimeout(poll, 5000);
       })
-      .then((r) => setAiOverview(r.overview))
-      .catch(() => {})
-      .finally(() => setRefreshing(false));
+      .catch(() => setRefreshing(false));
   };
 
   let quickInsights: string[] = [];
@@ -105,8 +118,8 @@ export default function Overview() {
       ) : (
         <div className="bg-surface-1 border border-border rounded-lg p-5 text-center">
           <p className="text-sm text-text-muted">
-            AI insights are not available yet. You need at least 10 posts, or
-            click <strong>Refresh AI</strong> to generate your first analysis.
+            AI insights are not available yet. Click{" "}
+            <strong>Refresh AI</strong> to generate your first analysis.
           </p>
         </div>
       )}

@@ -30,6 +30,20 @@ Before attributing performance to any single factor, consider whether other vari
 ## Data Summary
 ${summary}
 
+## Database Schema
+Available tables and columns for query_db:
+
+- **posts**: id (TEXT PK), content_preview (TEXT), content_type (TEXT), published_at (DATETIME), url (TEXT), created_at (DATETIME)
+- **post_metrics**: id (INTEGER PK), post_id (TEXT FK→posts.id), scraped_at (DATETIME), impressions (INTEGER), members_reached (INTEGER), reactions (INTEGER), comments (INTEGER), reposts (INTEGER), saves (INTEGER), sends (INTEGER), video_views (INTEGER), watch_time_seconds (INTEGER), avg_watch_time_seconds (INTEGER)
+- **follower_snapshots**: date (DATE PK), total_followers (INTEGER)
+- **profile_snapshots**: date (DATE PK), profile_views (INTEGER), search_appearances (INTEGER), all_appearances (INTEGER)
+- **ai_tags**: post_id (TEXT), tag (TEXT) — content tags
+- **ai_post_topics**: post_id (TEXT FK→posts.id), topic_id (TEXT FK→ai_taxonomy.id)
+- **ai_taxonomy**: id (TEXT PK), label (TEXT), description (TEXT)
+
+Note: post_metrics may have multiple rows per post (scraped at different times). Use the latest row per post for current metrics.
+Weighted engagement formula: (comments*5 + reposts*3 + saves*3 + sends*3 + reactions*1) / impressions
+
 ## Instructions
 Using the data summary above, identify patterns in content performance. Use the query_db tool to explore the database and find correlations between content attributes and engagement metrics. Focus on actionable patterns the author can use to improve.`;
 }

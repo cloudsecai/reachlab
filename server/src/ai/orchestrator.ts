@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type Database from "better-sqlite3";
+import BetterSqlite3 from "better-sqlite3";
 import { AiLogger } from "./logger.js";
 import { runAnalysis } from "./analyzer.js";
 import type { AnalysisResult } from "./analyzer.js";
@@ -102,8 +103,11 @@ export async function runPipeline(
       await tagPosts(client, db, posts, logger);
     }
 
+    // Open read-only connection for LLM query tool (safety: prevents writes)
+    const queryDb = new BetterSqlite3(db.name, { readonly: true });
+    try {
     // Run analysis
-    const analysis = await runAnalysis(client, db, logger);
+    const analysis = await runAnalysis(client, db, queryDb, logger);
 
     if (analysis) {
       // Process insights with lineage
@@ -225,6 +229,9 @@ export async function runPipeline(
     });
 
     return { runId, status: "completed" };
+    } finally {
+      queryDb.close();
+    }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     failRun(db, runId, message);

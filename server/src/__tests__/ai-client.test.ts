@@ -3,7 +3,7 @@ import { createClient, MODELS } from "../ai/client.js";
 
 describe("AI client", () => {
   it("exports MODELS constants", () => {
-    expect(MODELS.HAIKU).toBe("anthropic/claude-haiku-4-5-20251001");
+    expect(MODELS.HAIKU).toBe("anthropic/claude-3.5-haiku");
     expect(MODELS.SONNET).toBe("anthropic/claude-sonnet-4-6");
     expect(MODELS.OPUS).toBe("anthropic/claude-opus-4-6");
   });
