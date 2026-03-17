@@ -99,7 +99,7 @@ export async function runPipeline(
     if (untaggedIds.length > 0) {
       const posts = db
         .prepare(
-          `SELECT id, content_preview FROM posts WHERE id IN (${untaggedIds.map(() => "?").join(",")})`
+          `SELECT id, COALESCE(full_text, content_preview) as content_preview FROM posts WHERE id IN (${untaggedIds.map(() => "?").join(",")})`
         )
         .all(...untaggedIds) as { id: string; content_preview: string | null }[];
       await tagPosts(client, db, posts, logger);

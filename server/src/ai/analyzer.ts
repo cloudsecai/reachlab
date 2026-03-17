@@ -118,6 +118,21 @@ async function buildSummary(db: Database.Database): Promise<string> {
     )
     .get() as { total_followers: number } | undefined;
 
+  // Include recent post hooks for context
+  const recentPosts = db
+    .prepare(
+      `SELECT id, COALESCE(hook_text, SUBSTR(COALESCE(full_text, content_preview), 1, 100)) as preview,
+              content_type, published_at
+       FROM posts
+       ORDER BY published_at DESC
+       LIMIT 10`
+    )
+    .all() as { id: string; preview: string | null; content_type: string; published_at: string }[];
+
+  const postList = recentPosts
+    .map((p) => `- [${p.content_type}] ${p.published_at?.split("T")[0] ?? "?"}: "${p.preview ?? "(no preview)"}"`)
+    .join("\n");
+
   return [
     `Posts with metrics: ${postCount}`,
     `Date range: ${dateRange.earliest ?? "N/A"} to ${dateRange.latest ?? "N/A"}`,
@@ -126,6 +141,9 @@ async function buildSummary(db: Database.Database): Promise<string> {
     `Avg comments: ${Math.round(avgEngagement.avg_comments ?? 0)}`,
     `Avg reposts: ${Math.round(avgEngagement.avg_reposts ?? 0)}`,
     `Current followers: ${followerRow?.total_followers ?? "N/A"}`,
+    "",
+    "Recent posts (most recent first):",
+    postList,
   ].join("\n");
 }
 
