@@ -83,7 +83,7 @@ export default function Settings() {
 
       let assembled = promptText;
       if (topPosts.length > 0) {
-        assembled += "\n\n---\n\nHere are my top 10 best performing LinkedIn posts for tone and style reference:\n\n";
+        assembled += "\n\n---\n\nHere are my most popular previous posts for use as a style guide:\n\n";
         assembled += topPosts.map((p, i) => {
           const date = new Date(p.published_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
           const eng = p.engagement_rate != null ? (p.engagement_rate * 100).toFixed(1) + "%" : "N/A";
@@ -211,9 +211,9 @@ export default function Settings() {
             onClick={handleCopyPrompt}
             disabled={copyLoading || !promptText.trim()}
             className="px-4 py-2 rounded-md text-sm font-medium bg-surface-2 text-text-primary hover:bg-surface-3 transition-colors disabled:opacity-50"
-            title="Copy prompt with your top 10 performing posts appended (excludes announcements)"
+            title="Copy your writing prompt with top performing posts as a style guide"
           >
-            {copyLoading ? "Loading..." : copied ? "Copied!" : "Copy with Top Posts"}
+            {copyLoading ? "Loading..." : copied ? "Copied!" : "Copy Prompt"}
           </button>
         </div>
 

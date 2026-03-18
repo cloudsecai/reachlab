@@ -86,11 +86,10 @@ export async function runPipeline(
   const logger = new AiLogger(db, runId);
 
   try {
-    // Step 1: Taxonomy and tagging (kept from prior architecture)
-    const taxonomy = getTaxonomy(db);
-    if (taxonomy.length === 0) {
-      await discoverTaxonomy(client, db, logger);
-    }
+    // Step 1: Taxonomy and tagging
+    // Always run taxonomy discovery — it evolves existing topics and adds new ones
+    const existingTaxonomy = getTaxonomy(db);
+    await discoverTaxonomy(client, db, logger, existingTaxonomy.length > 0 ? existingTaxonomy : undefined);
     const untaggedIds = getUntaggedPostIds(db);
     if (untaggedIds.length > 0) {
       const posts = db

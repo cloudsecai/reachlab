@@ -132,12 +132,19 @@ Write a concise 2-3 sentence summary of the author's LinkedIn content performanc
 ${LANGUAGE_RULES}`;
 }
 
-export function taxonomyPrompt(postSummaries: string): string {
+export function taxonomyPrompt(
+  postSummaries: string,
+  existingTaxonomy?: { name: string; description: string }[]
+): string {
+  const existingBlock = existingTaxonomy && existingTaxonomy.length > 0
+    ? `\n## Existing Taxonomy\nThese topics were previously identified. Keep any that still apply, update descriptions if needed, remove any that are too vague or overlap, and add new topics for content not covered:\n${existingTaxonomy.map((t) => `- **${t.name}**: ${t.description}`).join("\n")}\n`
+    : "";
+
   return `You are a content taxonomy expert. Analyze the following LinkedIn post summaries and discover the natural TOPIC categories — what the posts are ABOUT, not their format or tone.
 
 ## Post Summaries
 ${postSummaries}
-
+${existingBlock}
 ## Instructions
 Return a JSON array of topic objects. Each object should have:
 - "name": A short, clear topic name (2-4 words)

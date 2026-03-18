@@ -71,13 +71,15 @@ export function registerInsightsRoutes(app: FastifyInstance, db: Database.Databa
     if (running) {
       return reply.status(409).send({ error: "Analysis already running", started_at: running.started_at });
     }
-    // Clear all tags to force re-tagging with post_category
+    // Clear all tags, topics, and taxonomy to force full regeneration
     db.prepare("DELETE FROM ai_tags").run();
+    db.prepare("DELETE FROM ai_post_topics").run();
+    db.prepare("DELETE FROM ai_taxonomy").run();
     const client = createClient(apiKey);
     runPipeline(client, db, "retag").catch((err) => {
       console.error("[AI Pipeline] Retag failed:", err.message);
     });
-    return { ok: true, message: "Cleared tags, re-tagging all posts with post_category classification" };
+    return { ok: true, message: "Cleared tags and taxonomy, regenerating from scratch" };
   });
 
   app.patch("/api/insights/recommendations/:id/feedback", async (request, reply) => {

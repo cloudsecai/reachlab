@@ -12,7 +12,8 @@ import { upsertTaxonomy } from "../db/ai-queries.js";
 export async function discoverTaxonomy(
   client: Anthropic,
   db: Database.Database,
-  logger: AiLogger
+  logger: AiLogger,
+  existingTaxonomy?: { name: string; description: string }[]
 ): Promise<{ name: string; description: string }[]> {
   // Gather all posts with content previews
   const posts = db
@@ -27,7 +28,7 @@ export async function discoverTaxonomy(
     )
     .join("\n");
 
-  const systemPrompt = taxonomyPrompt(postSummaries);
+  const systemPrompt = taxonomyPrompt(postSummaries, existingTaxonomy);
 
   const start = Date.now();
   const response = await client.messages.create({
