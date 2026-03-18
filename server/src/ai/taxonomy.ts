@@ -15,16 +15,17 @@ export async function discoverTaxonomy(
   logger: AiLogger,
   existingTaxonomy?: { name: string; description: string }[]
 ): Promise<{ name: string; description: string }[]> {
-  // Gather all posts with content previews
+  // Gather all posts — use full_text (truncated) for better topic discovery
   const posts = db
     .prepare(
-      "SELECT id, content_preview FROM posts ORDER BY published_at DESC"
+      `SELECT id, COALESCE(SUBSTR(full_text, 1, 300), content_preview) as summary
+       FROM posts ORDER BY published_at DESC`
     )
-    .all() as { id: string; content_preview: string | null }[];
+    .all() as { id: string; summary: string | null }[];
 
   const postSummaries = posts
     .map(
-      (p) => `[${p.id}] ${p.content_preview ?? "(no content)"}`
+      (p) => `[${p.id}] ${p.summary ?? "(no content)"}`
     )
     .join("\n");
 

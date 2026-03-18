@@ -152,8 +152,7 @@ export default function Posts() {
           Content pending for {backfillCount} post{backfillCount !== 1 ? "s" : ""} — open LinkedIn with the extension active to backfill.
         </div>
       )}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-semibold">Posts</h2>
+      <div className="flex items-center justify-end flex-wrap gap-3">
         <div className="flex gap-2">
           <select
             value={contentType}
@@ -174,14 +173,14 @@ export default function Posts() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-text-muted text-xs uppercase tracking-wider">
-              <th className="text-left px-4 py-3 font-medium">Post</th>
-              <th className="text-left px-3 py-3 font-medium w-28">Category</th>
-              <th className="text-left px-3 py-3 font-medium w-36">Topics</th>
+              <th className="text-left px-4 py-3 font-medium sticky top-[57px] bg-surface-1 z-10 after:absolute after:bottom-0 after:left-0 after:right-0 after:border-b after:border-border">Post</th>
+              <th className="text-left px-3 py-3 font-medium w-28 sticky top-[57px] bg-surface-1 z-10">Category</th>
+              <th className="text-left px-3 py-3 font-medium w-36 sticky top-[57px] bg-surface-1 z-10">Topics</th>
               {sortOptions.map((s) => (
                 <th
                   key={s.value}
                   onClick={() => toggleSort(s.value)}
-                  className="text-right px-4 py-3 font-medium cursor-pointer hover:text-text-primary w-28"
+                  className="text-right px-4 py-3 font-medium cursor-pointer hover:text-text-primary w-28 sticky top-[57px] bg-surface-1 z-10"
                 >
                   {s.label}
                   {sortIndicator(s.value)}
