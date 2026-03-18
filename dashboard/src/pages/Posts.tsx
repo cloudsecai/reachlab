@@ -220,7 +220,7 @@ export default function Posts() {
                         </div>
 
                         {/* Content: images on left + text on right */}
-                        <div className="flex gap-5">
+                        <div className="flex gap-5 items-center">
                           {/* Images */}
                           {imageCount(selectedPost) > 0 && (
                             <div className="flex flex-col gap-2 shrink-0">
