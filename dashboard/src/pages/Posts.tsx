@@ -26,6 +26,48 @@ const sortOptions = [
   { value: "comments", label: "Comments" },
 ];
 
+function ContentTypeIcon({ type }: { type: string }) {
+  const cls = "w-4 h-4 text-text-muted flex-shrink-0";
+  switch (type) {
+    case "text":
+      return (
+        <svg className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M3 4h10M3 7h7M3 10h9M3 13h5" strokeLinecap="round" />
+        </svg>
+      );
+    case "video":
+      return (
+        <svg className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="1.5" y="3" width="10" height="10" rx="1.5" />
+          <path d="M11.5 6l3-1.5v7L11.5 10" />
+        </svg>
+      );
+    case "image":
+      return (
+        <svg className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+          <circle cx="5.5" cy="6" r="1.5" />
+          <path d="M1.5 11l3.5-3 2.5 2 3-4L14.5 11" />
+        </svg>
+      );
+    case "carousel":
+      return (
+        <svg className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="3" y="2.5" width="10" height="11" rx="1.5" />
+          <rect x="1" y="4" width="2" height="8" rx="0.5" />
+          <rect x="13" y="4" width="2" height="8" rx="0.5" />
+        </svg>
+      );
+    default:
+      return (
+        <svg className={cls} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="2" y="2" width="12" height="12" rx="2" />
+          <path d="M5 8h6M8 5v6" strokeLinecap="round" />
+        </svg>
+      );
+  }
+}
+
 export default function Posts() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [total, setTotal] = useState(0);
@@ -95,6 +137,13 @@ export default function Posts() {
     setSelected((prev) => (prev === id ? null : id));
   };
 
+  const parseTopics = (topics: string | null): string[] => {
+    if (!topics) return [];
+    return topics.split(",").map((t) => t.trim()).filter(Boolean);
+  };
+
+  const TOTAL_COLS = 8; // post + category + topics + 5 sort cols
+
   return (
     <div className="space-y-4">
       {backfillCount > 0 && (
@@ -126,7 +175,8 @@ export default function Posts() {
           <thead>
             <tr className="border-b border-border text-text-muted text-xs uppercase tracking-wider">
               <th className="text-left px-4 py-3 font-medium">Post</th>
-              <th className="text-left px-4 py-3 font-medium w-20">Type</th>
+              <th className="text-left px-3 py-3 font-medium w-28">Category</th>
+              <th className="text-left px-3 py-3 font-medium w-36">Topics</th>
               {sortOptions.map((s) => (
                 <th
                   key={s.value}
@@ -149,21 +199,33 @@ export default function Posts() {
                     selected === p.id ? "bg-surface-2 border-l-2 border-l-accent" : ""
                   }`}
                 >
+                  {/* Post summary with icon */}
                   <td className="px-4 py-3">
-                    <p className="truncate max-w-xs text-text-primary">
-                      {p.hook_text || (p.full_text ? p.full_text.slice(0, 80) : p.content_preview) || "(no preview)"}
-                    </p>
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5" title={p.content_type}>
+                        <ContentTypeIcon type={p.content_type} />
+                      </div>
+                      <p className="text-text-primary line-clamp-2 leading-snug min-w-0">
+                        {p.hook_text || (p.full_text ? p.full_text.slice(0, 160) : p.content_preview) || "(no preview)"}
+                      </p>
+                    </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-surface-3 text-text-secondary w-fit">
-                        {p.content_type}
+                  {/* Category */}
+                  <td className="px-3 py-3 align-top">
+                    {p.post_category && (
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[11px] bg-accent/10 text-accent whitespace-nowrap">
+                        {p.post_category.replace(/_/g, " ")}
                       </span>
-                      {p.post_category && (
-                        <span className="inline-block px-2 py-0.5 rounded text-xs bg-accent/10 text-accent w-fit">
-                          {p.post_category.replace(/_/g, " ")}
+                    )}
+                  </td>
+                  {/* Topics */}
+                  <td className="px-3 py-3 align-top">
+                    <div className="flex flex-col gap-1">
+                      {parseTopics(p.topics).map((topic) => (
+                        <span key={topic} className="inline-block px-1.5 py-0.5 rounded text-[11px] bg-surface-3 text-text-muted whitespace-nowrap w-fit">
+                          {topic}
                         </span>
-                      )}
+                      ))}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">
@@ -188,7 +250,7 @@ export default function Posts() {
                 {/* Inline expansion */}
                 {selected === p.id && selectedPost && (
                   <tr key={`${p.id}-detail`} className="border-b border-border/50">
-                    <td colSpan={7} className="p-0">
+                    <td colSpan={TOTAL_COLS} className="p-0">
                       <div className="bg-surface-2/50 px-6 py-5 space-y-4">
                         {/* Header */}
                         <div className="flex items-center justify-between">
@@ -329,7 +391,7 @@ export default function Posts() {
             ))}
             {posts.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-text-muted">
+                <td colSpan={TOTAL_COLS} className="px-4 py-8 text-center text-text-muted">
                   No posts found
                 </td>
               </tr>

@@ -29,6 +29,7 @@ export interface Post {
   reposts: number | null;
   engagement_rate: number | null;
   post_category: string | null;
+  topics: string | null;
 }
 
 export interface PostsResponse {

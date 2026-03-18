@@ -220,7 +220,8 @@ export function queryPosts(db: Database.Database, params: PostsQueryParams) {
         THEN CAST(COALESCE(m.reactions, 0) + COALESCE(m.comments, 0) + COALESCE(m.reposts, 0) AS REAL) / m.impressions
         ELSE NULL
       END AS engagement_rate,
-      t.post_category
+      t.post_category,
+      (SELECT GROUP_CONCAT(tax.name, ',') FROM ai_post_topics apt JOIN ai_taxonomy tax ON tax.id = apt.taxonomy_id WHERE apt.post_id = p.id) AS topics
     FROM posts p
     LEFT JOIN post_metrics m ON m.post_id = p.id
       AND m.id = (SELECT MAX(id) FROM post_metrics WHERE post_id = p.id)
