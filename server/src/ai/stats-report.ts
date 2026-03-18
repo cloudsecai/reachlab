@@ -19,6 +19,8 @@ export interface PostRow {
 
 export interface PostWithER extends PostRow {
   er: number | null;
+  wer: number | null;
+  quadrant: "home_run" | "reach_win" | "niche_hit" | "underperformer" | null;
 }
 
 // ── Stats helpers ──────────────────────────────────────────
@@ -67,6 +69,24 @@ export function computeER(
   return ((reactions + comments + reposts) / impressions) * 100;
 }
 
+export function computeWeightedER(
+  reactions: number,
+  comments: number,
+  reposts: number,
+  saves: number | null,
+  sends: number | null,
+  impressions: number
+): number | null {
+  if (impressions <= 0) return null;
+  const score =
+    (comments * 5) +
+    (reposts * 3) +
+    ((saves ?? 0) * 3) +
+    ((sends ?? 0) * 3) +
+    (reactions * 1);
+  return (score / impressions) * 100;
+}
+
 // ── Formatters ─────────────────────────────────────────────
 
 export function pct(n: number): string {
@@ -108,6 +128,26 @@ export function getLocalDayName(isoString: string, tz: string): string {
   }).format(new Date(isoString));
 }
 
+// ── Quadrant assignment ───────────────────────────────────
+
+function assignQuadrants(posts: PostWithER[]): void {
+  const medianImpr = median(posts.map((p) => p.impressions));
+  const werValues = posts.filter((p) => p.wer !== null).map((p) => p.wer!);
+  const medianWER = median(werValues);
+
+  if (medianImpr === null || medianWER === null) return;
+
+  for (const p of posts) {
+    if (p.wer === null) { p.quadrant = null; continue; }
+    const highReach = p.impressions >= medianImpr;
+    const highQuality = p.wer >= medianWER;
+    if (highReach && highQuality) p.quadrant = "home_run";
+    else if (highReach && !highQuality) p.quadrant = "reach_win";
+    else if (!highReach && highQuality) p.quadrant = "niche_hit";
+    else p.quadrant = "underperformer";
+  }
+}
+
 // ── DB loader ──────────────────────────────────────────────
 
 function loadPostsWithMetrics(db: Database.Database): PostWithER[] {
@@ -131,10 +171,15 @@ function loadPostsWithMetrics(db: Database.Database): PostWithER[] {
     )
     .all() as PostRow[];
 
-  return rows.map((r) => ({
+  const posts = rows.map((r) => ({
     ...r,
     er: computeER(r.reactions, r.comments, r.reposts, r.impressions),
+    wer: computeWeightedER(r.reactions, r.comments, r.reposts, r.saves, r.sends, r.impressions),
+    quadrant: null as PostWithER["quadrant"],
   }));
+
+  assignQuadrants(posts);
+  return posts;
 }
 
 // ── Section builders ───────────────────────────────────────
@@ -146,14 +191,21 @@ function benchmarkLabel(er: number): string {
   return "exceptional (above 5%)";
 }
 
+const QUADRANT_LABELS: Record<string, string> = {
+  home_run: "🏆 HOME RUN",
+  reach_win: "⚡ REACH WIN",
+  niche_hit: "💎 NICHE HIT",
+  underperformer: "📉 UNDERPERFORMER",
+};
+
 function buildOverviewSection(
   db: Database.Database,
   posts: PostWithER[],
   globalMedianER: number | null,
+  globalMedianWER: number | null,
   globalIQR: number | null,
   timezone: string
 ): string {
-  const validERs = posts.filter((p) => p.er !== null).map((p) => p.er!);
   const followerRow = db
     .prepare(
       "SELECT total_followers FROM follower_snapshots ORDER BY date DESC LIMIT 1"
@@ -182,11 +234,12 @@ function buildOverviewSection(
   const globalMedianImpr = median(allImpressions);
   const totalImpressions = allImpressions.reduce((sum, v) => sum + v, 0);
 
+  if (globalMedianWER !== null) {
+    lines.push(`Median weighted engagement rate: ${pct(globalMedianWER)} (primary quality metric)`);
+  }
   if (globalMedianER !== null) {
     const iqrStr = globalIQR !== null ? ` (IQR: ${pct(globalIQR)})` : "";
-    lines.push(`Median engagement rate: ${pct(globalMedianER)}${iqrStr} — ${benchmarkLabel(globalMedianER)}`);
-  } else {
-    lines.push("Median engagement rate: N/A (no posts with impressions)");
+    lines.push(`Median standard engagement rate: ${pct(globalMedianER)}${iqrStr} — ${benchmarkLabel(globalMedianER)}`);
   }
 
   if (globalMedianImpr !== null) {
@@ -198,7 +251,19 @@ function buildOverviewSection(
     lines.push(`Current followers: ${followerRow.total_followers.toLocaleString()}`);
   }
 
-  lines.push(`Total posts analyzed: ${validERs.length}`);
+  // Quadrant distribution
+  const quadrants = posts.filter((p) => p.quadrant !== null);
+  if (quadrants.length > 0) {
+    const counts: Record<string, number> = { home_run: 0, reach_win: 0, niche_hit: 0, underperformer: 0 };
+    for (const p of quadrants) counts[p.quadrant!]++;
+    lines.push("");
+    lines.push("Post performance quadrants (reach × quality):");
+    lines.push(`  🏆 Home Runs (high reach + high quality): ${counts.home_run}`);
+    lines.push(`  ⚡ Reach Wins (high reach, lower quality): ${counts.reach_win}`);
+    lines.push(`  💎 Niche Hits (lower reach, high quality): ${counts.niche_hit}`);
+    lines.push(`  📉 Underperformers (low reach + low quality): ${counts.underperformer}`);
+  }
+
   return lines.join("\n");
 }
 
@@ -209,11 +274,15 @@ function buildRecentVsBaselineSection(posts: PostWithER[], timezone: string): st
   const recent = posts.filter((p) => new Date(p.published_at) >= cutoff);
   const baseline = posts.filter((p) => new Date(p.published_at) < cutoff);
 
+  const recentWERs = recent.filter((p) => p.wer !== null).map((p) => p.wer!);
+  const baselineWERs = baseline.filter((p) => p.wer !== null).map((p) => p.wer!);
   const recentERs = recent.filter((p) => p.er !== null).map((p) => p.er!);
   const baselineERs = baseline.filter((p) => p.er !== null).map((p) => p.er!);
   const recentImpressions = recent.map((p) => p.impressions);
   const baselineImpressions = baseline.map((p) => p.impressions);
 
+  const recentMedianWER = median(recentWERs);
+  const baselineMedianWER = median(baselineWERs);
   const recentMedianER = median(recentERs);
   const baselineMedianER = median(baselineERs);
   const recentMedianImpr = median(recentImpressions);
@@ -225,10 +294,17 @@ function buildRecentVsBaselineSection(posts: PostWithER[], timezone: string): st
     `All-time baseline: ${baseline.length} posts`,
   ];
 
+  if (recentMedianWER !== null && baselineMedianWER !== null) {
+    const dir = recentMedianWER > baselineMedianWER ? "above" : "below";
+    lines.push(
+      `Recent median weighted ER: ${pct(recentMedianWER)} — ${dir} all-time median of ${pct(baselineMedianWER)}`
+    );
+  }
+
   if (recentMedianER !== null && baselineMedianER !== null) {
     const erDir = recentMedianER > baselineMedianER ? "above" : "below";
     lines.push(
-      `Recent median ER: ${pct(recentMedianER)} — ${erDir} all-time median of ${pct(baselineMedianER)}`
+      `Recent median standard ER: ${pct(recentMedianER)} — ${erDir} all-time median of ${pct(baselineMedianER)}`
     );
   }
 
@@ -246,30 +322,30 @@ function buildRecentVsBaselineSection(posts: PostWithER[], timezone: string): st
     const imprUp = recentMedianImpr > baselineMedianImpr;
     if (erDown && imprUp) {
       lines.push(
-        `⚠ Note: ER is down but impressions are up. This is expected when LinkedIn pushes content to broader, colder audiences — higher reach naturally dilutes ER. Evaluate recent posts on BOTH dimensions.`
+        `⚠ Note: ER is down but impressions are up. This is expected when LinkedIn pushes content to broader, colder audiences — higher reach naturally dilutes ER.`
       );
     }
   }
 
-  // Standout recent posts — show top by ER and top by impressions
-  const topRecentByER = [...recent]
-    .filter((p) => p.er !== null)
-    .sort((a, b) => b.er! - a.er!)
+  // Standout recent posts — show top by weighted ER and top by impressions
+  const topRecentByWER = [...recent]
+    .filter((p) => p.wer !== null)
+    .sort((a, b) => b.wer! - a.wer!)
     .slice(0, 3);
   const topRecentByImpr = [...recent]
     .sort((a, b) => b.impressions - a.impressions)
     .slice(0, 3);
 
-  if (topRecentByER.length > 0) {
-    lines.push("Standout recent posts (by engagement rate):");
-    for (const p of topRecentByER) {
-      lines.push(`  - ${formatPostLine(p, timezone)}`);
+  if (topRecentByWER.length > 0) {
+    lines.push("Standout recent posts (by weighted engagement):");
+    for (const p of topRecentByWER) {
+      lines.push(`  ${formatPostLine(p, timezone)}`);
     }
   }
   if (topRecentByImpr.length > 0) {
     lines.push("Standout recent posts (by impressions/reach):");
     for (const p of topRecentByImpr) {
-      lines.push(`  - ${formatPostLine(p, timezone)}`);
+      lines.push(`  ${formatPostLine(p, timezone)}`);
     }
   }
 
@@ -279,29 +355,49 @@ function buildRecentVsBaselineSection(posts: PostWithER[], timezone: string): st
 function buildFormatSection(posts: PostWithER[]): string {
   const byType = new Map<string, PostWithER[]>();
   for (const p of posts) {
-    if (p.er === null) continue;
+    if (p.wer === null) continue;
     const arr = byType.get(p.content_type) ?? [];
     arr.push(p);
     byType.set(p.content_type, arr);
   }
 
-  const allERs = posts.filter((p) => p.er !== null).map((p) => p.er!);
-  const lines = ["## 3. Format Comparison"];
+  const lines = [
+    "## 3. Format Comparison",
+    "⚠ IMPORTANT: Each format has different platform benchmarks. Do NOT compare formats against each other.",
+    "Platform benchmarks: carousels ~6.6%, multi-image ~6.1%, text ~4%, single-image ~4.8%, video ~1.75%",
+    "",
+  ];
 
   for (const [type, typePosts] of byType) {
+    const wers = typePosts.map((p) => p.wer!);
     const ers = typePosts.map((p) => p.er!);
     const impressions = typePosts.map((p) => p.impressions);
+    const medWER = median(wers);
     const medER = median(ers);
     const medImpr = median(impressions);
-    if (medER === null) continue;
+    if (medWER === null) continue;
+
+    lines.push(`### ${type} (n=${typePosts.length})`);
+    lines.push(`  Median weighted ER: ${pct(medWER)}, median standard ER: ${medER !== null ? pct(medER) : "N/A"}, median impressions: ${medImpr?.toLocaleString() ?? "N/A"}`);
+
     if (typePosts.length < 5) {
-      lines.push(`- ${type} (n=${typePosts.length}): too few posts — ${pct(medER)} median ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions`);
+      lines.push(`  ⚠ Too few posts for reliable comparison`);
       continue;
     }
-    const delta = cliffsDelta(ers, allERs);
-    lines.push(
-      `- ${type} (n=${typePosts.length}): ${pct(medER)} median ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions — ${delta.label} ER difference vs overall (Cliff's δ=${delta.d.toFixed(2)})`
-    );
+
+    // Per-format top 3
+    const sorted = [...typePosts].sort((a, b) => b.wer! - a.wer!);
+    lines.push(`  Top performers in this format:`);
+    for (const p of sorted.slice(0, 3)) {
+      lines.push(`    ${formatPostLineShort(p)}`);
+    }
+    if (sorted.length > 3) {
+      const bottom = sorted.slice(-2);
+      lines.push(`  Weakest in this format:`);
+      for (const p of bottom) {
+        lines.push(`    ${formatPostLineShort(p)}`);
+      }
+    }
   }
 
   if (byType.size === 0) lines.push("No format data available.");
@@ -314,29 +410,41 @@ function formatPostLine(p: PostWithER, tz: string): string {
     month: "short",
     day: "numeric",
   });
+  const werStr = p.wer !== null ? pct(p.wer) : "N/A";
   const erStr = p.er !== null ? pct(p.er) : "N/A";
   const saves = p.saves ? `, ${p.saves} saves` : "";
   const sends = p.sends ? `, ${p.sends} sends` : "";
-  return `- "${preview}" (${date}, ${p.content_type}) — ${p.impressions.toLocaleString()} impressions, ${erStr} ER, ${p.reactions} reactions, ${p.comments} comments${saves}${sends}`;
+  const quad = p.quadrant ? ` ${QUADRANT_LABELS[p.quadrant]}` : "";
+  return `- "${preview}" (${date}, ${p.content_type}) — ${p.impressions.toLocaleString()} impressions, ${werStr} weighted ER, ${erStr} standard ER, ${p.reactions} reactions, ${p.comments} comments${saves}${sends}${quad}`;
+}
+
+function formatPostLineShort(p: PostWithER): string {
+  const preview = getPostPreview(p);
+  const werStr = p.wer !== null ? pct(p.wer) : "N/A";
+  const quad = p.quadrant ? ` ${QUADRANT_LABELS[p.quadrant]}` : "";
+  return `- "${preview}" — ${p.impressions.toLocaleString()} impr, ${werStr} weighted ER, ${p.comments} comments${quad}`;
 }
 
 function buildTopBottomSection(posts: PostWithER[], timezone: string): string {
-  const withER = [...posts].filter((p) => p.er !== null);
+  const withWER = [...posts].filter((p) => p.wer !== null);
 
-  // Top/bottom by ER
-  const sortedByER = [...withER].sort((a, b) => b.er! - a.er!);
-  const topER = sortedByER.slice(0, 10);
-  const bottomER = sortedByER.slice(-10).reverse();
+  // Top by weighted ER
+  const sortedByWER = [...withWER].sort((a, b) => b.wer! - a.wer!);
+  const topWER = sortedByWER.slice(0, 10);
 
   // Top by impressions (reach)
   const sortedByImpr = [...posts].sort((a, b) => b.impressions - a.impressions);
   const topImpr = sortedByImpr.slice(0, 10);
 
-  const lines = ["## 4. Top 10 Posts (by engagement rate)"];
-  if (topER.length === 0) {
+  // Home runs: top posts that appear in BOTH lists
+  const topWERSet = new Set(topWER.map((p) => p.id));
+  const homeRuns = topImpr.filter((p) => topWERSet.has(p.id));
+
+  const lines = ["## 4. Top 10 Posts (by weighted engagement rate — primary quality metric)"];
+  if (topWER.length === 0) {
     lines.push("No data.");
   } else {
-    for (const p of topER) lines.push(formatPostLine(p, timezone));
+    for (const p of topWER) lines.push(formatPostLine(p, timezone));
   }
 
   lines.push("", "## 5. Top 10 Posts (by impressions/reach)");
@@ -346,23 +454,21 @@ function buildTopBottomSection(posts: PostWithER[], timezone: string): string {
     for (const p of topImpr) lines.push(formatPostLine(p, timezone));
   }
 
-  lines.push("", "## 6. Bottom 10 Posts (by engagement rate)");
-  if (bottomER.length === 0) {
-    lines.push("No data.");
-  } else {
-    // Annotate posts that are high-reach but low-ER
-    const topImprSet = new Set(topImpr.map((p) => p.id));
-    for (const p of bottomER) {
-      const line = formatPostLine(p, timezone);
-      if (topImprSet.has(p.id)) {
-        lines.push(line + " ⚡ REACH WIN — this post is also in the Top 10 by impressions. Low ER here is expected: high-reach posts get shown to colder audiences who are less likely to engage.");
-      } else {
-        lines.push(line);
-      }
-    }
+  if (homeRuns.length > 0) {
+    lines.push("", "## 5b. Home Runs (top 10 in BOTH weighted ER and impressions — these are the gold standard)");
+    for (const p of homeRuns) lines.push(formatPostLine(p, timezone));
   }
 
-  // Bottom by impressions (actual underperformers)
+  // Bottom by weighted ER
+  const bottomWER = sortedByWER.slice(-10).reverse();
+  lines.push("", "## 6. Bottom 10 Posts (by weighted engagement rate)");
+  if (bottomWER.length === 0) {
+    lines.push("No data.");
+  } else {
+    for (const p of bottomWER) lines.push(formatPostLine(p, timezone));
+  }
+
+  // Bottom by impressions
   const sortedByImprAsc = [...posts].sort((a, b) => a.impressions - b.impressions);
   const bottomImpr = sortedByImprAsc.slice(0, 10);
   lines.push("", "## 6b. Bottom 10 Posts (by impressions — lowest reach)");
@@ -380,7 +486,7 @@ function buildDaySection(posts: PostWithER[], timezone: string): string {
   const dayOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
   for (const p of posts) {
-    if (p.er === null) continue;
+    if (p.wer === null) continue;
     const day = getLocalDayName(p.published_at, timezone);
     const arr = byDay.get(day) ?? [];
     arr.push(p);
@@ -394,9 +500,10 @@ function buildDaySection(posts: PostWithER[], timezone: string): string {
       lines.push(`- ${day}: no posts`);
       continue;
     }
+    const medWER = median(dayPosts.map((p) => p.wer!))!;
     const medER = median(dayPosts.map((p) => p.er!))!;
     const medImpr = median(dayPosts.map((p) => p.impressions));
-    lines.push(`- ${day} (n=${dayPosts.length}): ${pct(medER)} median ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions`);
+    lines.push(`- ${day} (n=${dayPosts.length}): ${pct(medWER)} median weighted ER, ${pct(medER)} standard ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions`);
   }
 
   return lines.join("\n");
@@ -414,7 +521,7 @@ function buildTimeSection(posts: PostWithER[], timezone: string): string {
   const byWindow = new Map<string, PostWithER[]>();
 
   for (const p of posts) {
-    if (p.er === null) continue;
+    if (p.wer === null) continue;
     const hour = getLocalHour(p.published_at, timezone);
     const window = getTimeWindow(hour);
     const arr = byWindow.get(window) ?? [];
@@ -437,9 +544,9 @@ function buildTimeSection(posts: PostWithER[], timezone: string): string {
       lines.push(`- ${window}: no posts`);
       continue;
     }
-    const medER = median(windowPosts.map((p) => p.er!))!;
+    const medWER = median(windowPosts.map((p) => p.wer!))!;
     const medImpr = median(windowPosts.map((p) => p.impressions));
-    lines.push(`- ${window} (n=${windowPosts.length}): ${pct(medER)} median ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions`);
+    lines.push(`- ${window} (n=${windowPosts.length}): ${pct(medWER)} median weighted ER, ${medImpr?.toLocaleString() ?? "N/A"} median impressions`);
   }
 
   return lines.join("\n");
@@ -457,17 +564,19 @@ function buildCommentQualitySection(posts: PostWithER[]): string {
 
   for (const bucket of buckets) {
     const inBucket = posts.filter(
-      (p) => p.comments >= bucket.min && p.comments <= bucket.max && p.er !== null
+      (p) => p.comments >= bucket.min && p.comments <= bucket.max && p.wer !== null
     );
     if (inBucket.length === 0) {
       lines.push(`- ${bucket.label}: no posts`);
       continue;
     }
+    const medWER = median(inBucket.map((p) => p.wer!));
     const medReposts = median(inBucket.map((p) => p.reposts)) ?? 0;
     const medSaves = median(inBucket.filter((p) => p.saves !== null).map((p) => p.saves!));
     const savesStr = medSaves !== null ? `, ${medSaves.toFixed(1)} median saves` : "";
+    const werStr = medWER !== null ? `, ${pct(medWER)} median weighted ER` : "";
     lines.push(
-      `- ${bucket.label} (n=${inBucket.length}): ${medReposts.toFixed(1)} median reposts${savesStr}`
+      `- ${bucket.label} (n=${inBucket.length}): ${medReposts.toFixed(1)} median reposts${savesStr}${werStr}`
     );
   }
 
@@ -569,11 +678,13 @@ export function buildStatsReport(
 ): string {
   const posts = loadPostsWithMetrics(db);
   const validERs = posts.filter((p) => p.er !== null).map((p) => p.er!);
+  const validWERs = posts.filter((p) => p.wer !== null).map((p) => p.wer!);
   const globalMedianER = median(validERs);
+  const globalMedianWER = median(validWERs);
   const globalIQR = iqr(validERs);
 
   const sections = [
-    buildOverviewSection(db, posts, globalMedianER, globalIQR, timezone),
+    buildOverviewSection(db, posts, globalMedianER, globalMedianWER, globalIQR, timezone),
     buildRecentVsBaselineSection(posts, timezone),
     buildFormatSection(posts),
     buildTopBottomSection(posts, timezone),

@@ -193,20 +193,39 @@ ${knowledgeBase}
 
 ${feedbackHistory}
 
-## Impressions vs Engagement Rate — CRITICAL
+## Metrics — CRITICAL
 
-A post is NOT "low performing" just because its engagement rate is below average. You MUST evaluate posts on BOTH dimensions:
-- **Impressions (reach)**: How many people saw the content. This measures distribution and algorithmic amplification.
-- **Engagement rate**: What percentage interacted. This measures resonance with the audience who saw it.
+The stats report uses TWO engagement rate metrics. Understand them both:
 
-These metrics often move inversely: when LinkedIn pushes content to broader, colder audiences (high impressions), ER naturally drops because those viewers are less connected to the creator. A post with 14,000 impressions and 0.4% ER is performing VERY differently from a post with 1,000 impressions and 0.4% ER — the first is a reach win, the second is actually underperforming.
+- **Weighted engagement rate (primary)**: \`(comments×5 + reposts×3 + saves×3 + sends×3 + reactions×1) / impressions\`. This is the PRIMARY metric throughout the stats report. It weights high-signal actions (comments, shares, saves) much higher than passive likes.
+- **Standard engagement rate (secondary)**: \`(reactions + comments + reposts) / impressions\`. Shown for reference alongside weighted ER.
+- **Impressions (reach)**: How many people saw the content. Measures distribution and algorithmic amplification.
+
+When referring to "engagement rate" in your analysis, ALWAYS mean the weighted engagement rate unless explicitly stating otherwise. The stats report labels these as "WER" and "ER" — translate to plain English as "weighted engagement rate" and "standard engagement rate".
+
+**Quadrant system:** Each post in the stats report is labeled with a quadrant:
+- 🏠 **Home Run**: High reach + high weighted engagement — the best posts
+- ⚡ **Reach Win**: High reach + lower weighted engagement — good for distribution
+- 🎯 **Niche Hit**: Lower reach + high weighted engagement — resonates deeply with core audience
+- ⬇️ **Underperformer**: Below median on both dimensions
 
 **Rules:**
-- Never call a post "underperforming" based on ER alone when it has above-median impressions.
-- When comparing recent vs baseline, compare BOTH median ER and median impressions. If impressions are up but ER is down, say that — and explain that this is expected behavior for high-reach content.
-- For "top performer" analysis, consider both the ER leaderboard and the impressions leaderboard. Posts can be top performers on either dimension.
-- The most valuable posts are those that achieve both high reach AND high engagement — highlight these specifically.
-- **CRITICAL for category-level analysis**: When comparing post categories (e.g., news commentary vs personal stories), you MUST evaluate categories on BOTH median ER AND median impressions. A category with low median ER but high median impressions is a REACH strategy, not a failing strategy. If a specific post in a "low ER" category got massive impressions and comments, that post was a clear win — do not use it as evidence that the category underperforms. Posts marked with ⚡ REACH WIN in the stats report are explicitly high-reach posts where low ER is expected and acceptable.
+- Never call a post "underperforming" based on engagement rate alone when it has above-median impressions (it's a Reach Win).
+- When comparing recent vs baseline, compare BOTH median weighted ER and median impressions. If impressions are up but ER is down, say that — and explain that this is expected behavior for high-reach content.
+- For "top performer" analysis, consider both the weighted ER leaderboard and the impressions leaderboard. Posts can be top performers on either dimension. Home Runs (both) are the most valuable.
+- **CRITICAL for category-level analysis**: When comparing post categories, you MUST evaluate categories on BOTH median weighted ER AND median impressions. A category with low median ER but high median impressions is a REACH strategy, not a failing strategy.
+
+## Format-Aware Benchmarking — CRITICAL
+
+Different content formats have fundamentally different engagement profiles. The stats report includes per-format median benchmarks. You MUST compare posts against their own format's benchmark, not the overall median.
+
+For example, if carousels have a 6.6% median weighted ER and text posts have 4%, a text post at 4.5% is performing well for its format — do NOT call it "below average" by comparing to the carousel benchmark.
+
+**Rules:**
+- Always identify a post's content format before evaluating its performance
+- Compare against format-specific medians shown in the stats report
+- When recommending format changes, cite the format benchmarks as evidence
+- A post that is below overall median but above its format median is performing well
 
 ## Comparative Analysis — REQUIRED
 

@@ -716,7 +716,7 @@ export function getProgressMetrics(
   const computeSummary = (sinceDays: number, untilDays: number): MetricsSummary => {
     const rows = db
       .prepare(
-        `SELECT pm.impressions, pm.reactions, pm.comments, pm.reposts
+        `SELECT pm.impressions, pm.reactions, pm.comments, pm.reposts, pm.saves, pm.sends
          FROM posts p
          JOIN post_metrics pm ON pm.post_id = p.id
          WHERE p.published_at > datetime('now', ? || ' days')
@@ -728,14 +728,17 @@ export function getProgressMetrics(
       reactions: number;
       comments: number;
       reposts: number;
+      saves: number | null;
+      sends: number | null;
     }[];
 
     if (rows.length === 0) {
       return { median_er: null, median_impressions: null, total_posts: 0, avg_comments: null };
     }
 
+    // Use weighted ER as primary metric
     const ers = rows
-      .map((r) => ((r.reactions + r.comments + r.reposts) / r.impressions) * 100)
+      .map((r) => ((r.comments * 5 + r.reposts * 3 + (r.saves ?? 0) * 3 + (r.sends ?? 0) * 3 + r.reactions * 1) / r.impressions) * 100)
       .sort((a, b) => a - b);
     const impressions = rows.map((r) => r.impressions).sort((a, b) => a - b);
     const comments = rows.map((r) => r.comments);
@@ -774,7 +777,7 @@ export function getCategoryPerformance(db: Database.Database): CategoryPerforman
   const rows = db
     .prepare(
       `SELECT t.post_category as category,
-              pm.impressions, pm.reactions, pm.comments, pm.reposts
+              pm.impressions, pm.reactions, pm.comments, pm.reposts, pm.saves, pm.sends
        FROM ai_tags t
        JOIN post_metrics pm ON pm.post_id = t.post_id
        WHERE t.post_category IS NOT NULL
@@ -786,21 +789,23 @@ export function getCategoryPerformance(db: Database.Database): CategoryPerforman
     reactions: number;
     comments: number;
     reposts: number;
+    saves: number | null;
+    sends: number | null;
   }[];
 
-  // Group by category
+  // Group by category — use weighted ER as primary metric
   const groups: Record<string, { ers: number[]; impressions: number[]; interactions: number[] }> = {};
   for (const r of rows) {
     if (!groups[r.category]) groups[r.category] = { ers: [], impressions: [], interactions: [] };
-    const er = ((r.reactions + r.comments + r.reposts) / r.impressions) * 100;
-    groups[r.category].ers.push(er);
+    const wer = ((r.comments * 5 + r.reposts * 3 + (r.saves ?? 0) * 3 + (r.sends ?? 0) * 3 + r.reactions * 1) / r.impressions) * 100;
+    groups[r.category].ers.push(wer);
     groups[r.category].impressions.push(r.impressions);
     groups[r.category].interactions.push(r.reactions + r.comments + r.reposts);
   }
 
-  // Compute overall median ER for status classification
+  // Compute overall median weighted ER for status classification
   const allErs = rows
-    .map((r) => ((r.reactions + r.comments + r.reposts) / r.impressions) * 100)
+    .map((r) => ((r.comments * 5 + r.reposts * 3 + (r.saves ?? 0) * 3 + (r.sends ?? 0) * 3 + r.reactions * 1) / r.impressions) * 100)
     .sort((a, b) => a - b);
   const overallMedianEr =
     allErs.length > 0
@@ -934,7 +939,7 @@ export function getSparklineData(
 ): SparklinePoint[] {
   const rows = db
     .prepare(
-      `SELECT p.published_at, pm.impressions, pm.reactions, pm.comments, pm.reposts, pm.saves
+      `SELECT p.published_at, pm.impressions, pm.reactions, pm.comments, pm.reposts, pm.saves, pm.sends
        FROM posts p
        JOIN post_metrics pm ON pm.post_id = p.id
        WHERE p.published_at > datetime('now', ? || ' days')
@@ -948,11 +953,13 @@ export function getSparklineData(
     comments: number;
     reposts: number;
     saves: number | null;
+    sends: number | null;
   }[];
 
   return rows.map((r) => ({
     date: r.published_at,
-    er: Math.round(((r.reactions + r.comments + r.reposts) / r.impressions) * 10000) / 100,
+    // Use weighted ER as primary sparkline metric
+    er: Math.round(((r.comments * 5 + r.reposts * 3 + (r.saves ?? 0) * 3 + (r.sends ?? 0) * 3 + r.reactions * 1) / r.impressions) * 10000) / 100,
     impressions: r.impressions,
     comments: r.comments,
     comment_ratio: r.reactions > 0 ? Math.round((r.comments / r.reactions) * 100) / 100 : 0,
