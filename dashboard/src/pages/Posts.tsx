@@ -155,9 +155,16 @@ export default function Posts() {
                     </p>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-surface-3 text-text-secondary">
-                      {p.content_type}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-surface-3 text-text-secondary w-fit">
+                        {p.content_type}
+                      </span>
+                      {p.post_category && (
+                        <span className="inline-block px-2 py-0.5 rounded text-xs bg-accent/10 text-accent w-fit">
+                          {p.post_category.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-text-secondary">
                     {new Date(p.published_at).toLocaleDateString()}
@@ -197,6 +204,11 @@ export default function Posts() {
                             <span className="inline-block px-2 py-0.5 rounded text-xs font-mono bg-surface-3 text-text-secondary">
                               {selectedPost.content_type}
                             </span>
+                            {selectedPost.post_category && (
+                              <span className="inline-block px-2 py-0.5 rounded text-xs bg-accent/10 text-accent">
+                                {selectedPost.post_category.replace(/_/g, " ")}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-3">
                             {selectedPost.url && (

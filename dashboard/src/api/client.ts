@@ -28,6 +28,7 @@ export interface Post {
   comments: number | null;
   reposts: number | null;
   engagement_rate: number | null;
+  post_category: string | null;
 }
 
 export interface PostsResponse {

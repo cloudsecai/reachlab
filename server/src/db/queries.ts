@@ -219,10 +219,12 @@ export function queryPosts(db: Database.Database, params: PostsQueryParams) {
       CASE WHEN m.impressions > 0
         THEN CAST(COALESCE(m.reactions, 0) + COALESCE(m.comments, 0) + COALESCE(m.reposts, 0) AS REAL) / m.impressions
         ELSE NULL
-      END AS engagement_rate
+      END AS engagement_rate,
+      t.post_category
     FROM posts p
     LEFT JOIN post_metrics m ON m.post_id = p.id
       AND m.id = (SELECT MAX(id) FROM post_metrics WHERE post_id = p.id)
+    LEFT JOIN ai_tags t ON t.post_id = p.id
     ${where}
     ORDER BY ${sortCol} ${sortOrder}
     LIMIT ? OFFSET ?
