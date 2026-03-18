@@ -116,9 +116,6 @@ async function trySync(manual = false) {
     const { lastSyncAt } = await chrome.storage.local.get("lastSyncAt");
     if (lastSyncAt && Date.now() - lastSyncAt < SYNC_INTERVAL_MS) return;
 
-    // Check if user has a linkedin.com tab open
-    const tabs = await chrome.tabs.query({ url: "*://*.linkedin.com/*" });
-    if (tabs.length === 0) return;
   }
 
   // Check server health
