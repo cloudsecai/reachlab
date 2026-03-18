@@ -21,7 +21,7 @@ React Dashboard (Tailwind CSS + Chart.js)
 - **Node.js** >= 20
 - **npm** (comes with Node)
 - **Chrome** or Chromium-based browser
-- **Anthropic API key** (optional, for AI Coach features)
+- **OpenRouter API key** (optional, for AI Coach features)
 
 ## Quick Start
 
@@ -80,10 +80,10 @@ Go to **http://localhost:3210** in your browser. You should see your posts and m
 
 The AI Coach analyzes your posting patterns and generates actionable recommendations. To enable it:
 
-1. Get an API key from [Anthropic](https://console.anthropic.com/)
+1. Get an API key from [OpenRouter](https://openrouter.ai/keys)
 2. Create a `.env` file in the project root:
    ```
-   TRUSTMIND_LLM_API_KEY=sk-ant-...
+   TRUSTMIND_LLM_API_KEY=sk-or-...
    ```
 3. Restart the server
 4. Go to the **Coach** tab in the dashboard and click **Refresh AI**
