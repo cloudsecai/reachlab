@@ -11,6 +11,7 @@ export function upsertPost(
     full_text?: string | null;
     hook_text?: string | null;
     image_urls?: string[] | null;
+    video_url?: string | null;
   }
 ): void {
   const imageUrlsJson = post.image_urls && post.image_urls.length > 0 ? JSON.stringify(post.image_urls) : null;
@@ -26,7 +27,8 @@ export function upsertPost(
          url = COALESCE(@url, url),
          full_text = COALESCE(@full_text, full_text),
          hook_text = COALESCE(@hook_text, hook_text),
-         image_urls = COALESCE(@image_urls, image_urls)
+         image_urls = COALESCE(@image_urls, image_urls),
+         video_url = COALESCE(@video_url, video_url)
        WHERE id = @id`
     ).run({
       id: post.id,
@@ -37,11 +39,12 @@ export function upsertPost(
       full_text: post.full_text ?? null,
       hook_text: post.hook_text ?? null,
       image_urls: imageUrlsJson,
+      video_url: post.video_url ?? null,
     });
   } else {
     db.prepare(
-      `INSERT INTO posts (id, content_preview, content_type, published_at, url, full_text, hook_text, image_urls)
-       VALUES (@id, @content_preview, @content_type, @published_at, @url, @full_text, @hook_text, @image_urls)`
+      `INSERT INTO posts (id, content_preview, content_type, published_at, url, full_text, hook_text, image_urls, video_url)
+       VALUES (@id, @content_preview, @content_type, @published_at, @url, @full_text, @hook_text, @image_urls, @video_url)`
     ).run({
       id: post.id,
       content_preview: post.content_preview ?? null,
@@ -51,6 +54,7 @@ export function upsertPost(
       full_text: post.full_text ?? null,
       hook_text: post.hook_text ?? null,
       image_urls: imageUrlsJson,
+      video_url: post.video_url ?? null,
     });
   }
 }

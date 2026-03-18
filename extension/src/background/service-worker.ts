@@ -312,6 +312,7 @@ interface ScrapedContent {
   hook_text: string | null;
   full_text: string | null;
   image_urls: string[];
+  video_url?: string | null;
 }
 
 /**
@@ -330,10 +331,12 @@ async function scrapePostContent(
   const hookResult = await sendScrapeCommand(tabId);
   let hookText: string | null = null;
   let imageUrls: string[] = [];
+  let videoUrl: string | null = null;
 
   if (hookResult.type === "post-content") {
     hookText = hookResult.data.hook_text;
     imageUrls = hookResult.data.image_urls;
+    videoUrl = hookResult.data.video_url ?? null;
   }
 
   // Phase 2: Click "see more" if present, then re-scrape for full_text
@@ -379,7 +382,7 @@ async function scrapePostContent(
     // No see more button or script injection failed — continue with hook as full
   }
 
-  return { id: postId, hook_text: hookText, full_text: fullText, image_urls: imageUrls };
+  return { id: postId, hook_text: hookText, full_text: fullText, image_urls: imageUrls, video_url: videoUrl };
 }
 
 /**

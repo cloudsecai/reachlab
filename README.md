@@ -22,6 +22,8 @@ React Dashboard (Tailwind CSS + Chart.js)
 - **npm** (comes with Node)
 - **Chrome** or Chromium-based browser
 - **OpenRouter API key** (optional, for AI Coach features)
+- **ffmpeg** (optional, for video transcription — `brew install ffmpeg`)
+- **whisper-cpp** (optional, for video transcription — `brew install whisper-cpp`)
 
 ## Quick Start
 
@@ -108,7 +110,7 @@ npm test
 ```
 ├── server/           # Fastify API server
 │   ├── src/
-│   │   ├── ai/       # AI analysis pipeline (Anthropic Claude)
+│   │   ├── ai/       # AI analysis pipeline (OpenRouter), video transcription (whisper.cpp)
 │   │   ├── db/       # SQLite schema, migrations, queries
 │   │   ├── routes/   # API endpoints
 │   │   └── index.ts  # Server entrypoint
@@ -138,3 +140,26 @@ After the initial sync, some posts may show "Content pending" — this means the
 3. The extension will automatically backfill post content as you visit LinkedIn
 
 You can check the backfill status on the **Posts** page — a banner will show how many posts still need content.
+
+## Video Transcription
+
+Video posts are automatically transcribed using local whisper.cpp (no external API needed). When the extension scrapes a video post page, it captures the video URL. The server then:
+
+1. Downloads the video file
+2. Extracts audio with ffmpeg (16kHz WAV)
+3. Transcribes using whisper-cli with the `base.en` model
+4. Stores the transcript as the post's `full_text`
+
+Setup:
+```bash
+brew install ffmpeg whisper-cpp
+```
+
+The whisper model (~148MB) needs to be downloaded once:
+```bash
+mkdir -p server/data/models
+curl -L -o server/data/models/ggml-base.en.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+```
+
+Transcription runs automatically on server startup and when video posts are ingested.

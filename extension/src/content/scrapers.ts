@@ -227,7 +227,23 @@ export function scrapePostPage(doc: Document): ScrapedPostContent {
     }
   }
 
-  return { hook_text: hookText, full_text: fullText, image_urls: imageUrls };
+  // Extract video URL — look for video source in the post
+  let videoUrl: string | null = null;
+  const videoEl = doc.querySelector(
+    'video source[src*="dms.licdn.com"], video source[type="video/mp4"], video[src*="dms.licdn.com"]'
+  );
+  if (videoEl) {
+    videoUrl = videoEl.getAttribute("src");
+  }
+  // Fallback: check for video element with src attribute directly
+  if (!videoUrl) {
+    const directVideo = doc.querySelector('video[src]') as HTMLVideoElement | null;
+    if (directVideo?.src && (directVideo.src.includes("licdn.com") || directVideo.src.includes("linkedin"))) {
+      videoUrl = directVideo.src;
+    }
+  }
+
+  return { hook_text: hookText, full_text: fullText, image_urls: imageUrls, video_url: videoUrl };
 }
 
 /**

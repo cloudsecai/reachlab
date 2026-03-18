@@ -46,6 +46,7 @@ export const scrapedPostContentSchema = z.object({
   hook_text: z.string().nullable(),
   full_text: z.string().nullable(),
   image_urls: z.array(z.string()),
+  video_url: z.string().nullable().optional(),
 });
 
 // --- TypeScript interfaces (inferred from schemas) ---

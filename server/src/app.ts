@@ -194,6 +194,16 @@ export function buildApp(dbPath: string) {
       }
     }
 
+    // Auto-trigger video transcription for video posts with URLs
+    if (payload.posts?.some((p) => p.video_url)) {
+      import("./ai/video-transcriber.js").then(({ transcribeAllPending }) => {
+        const dataDir = path.dirname(dbPath);
+        transcribeAllPending(db, dataDir).catch((err: any) => {
+          console.error("[Transcribe] Auto-transcription failed:", err.message);
+        });
+      }).catch(() => {});
+    }
+
     // Auto-trigger AI pipeline if conditions met
     const aiApiKey = process.env.TRUSTMIND_LLM_API_KEY;
     if (aiApiKey && postsUpserted > 0) {
@@ -418,6 +428,13 @@ export function buildApp(dbPath: string) {
         }
       }).catch(() => {});
     }
+
+    // Also auto-transcribe any video posts that need it
+    import("./ai/video-transcriber.js").then(({ transcribeAllPending }) => {
+      transcribeAllPending(db, dataDir).catch((err: any) => {
+        console.error("[Transcribe] Startup transcription failed:", err.message);
+      });
+    }).catch(() => {});
   });
 
   // Serve dashboard static files
