@@ -15,13 +15,23 @@ export async function discoverTaxonomy(
   logger: AiLogger,
   existingTaxonomy?: { name: string; description: string }[]
 ): Promise<{ name: string; description: string }[]> {
-  // Gather all posts — use full_text (truncated) for better topic discovery
-  const posts = db
-    .prepare(
-      `SELECT id, COALESCE(SUBSTR(full_text, 1, 300), content_preview) as summary
-       FROM posts ORDER BY published_at DESC`
-    )
-    .all() as { id: string; summary: string | null }[];
+  // If taxonomy exists, only send untagged posts (incremental update).
+  // If no taxonomy, send all posts (full discovery).
+  const query = existingTaxonomy && existingTaxonomy.length > 0
+    ? `SELECT p.id, COALESCE(SUBSTR(p.full_text, 1, 300), p.content_preview) as summary
+       FROM posts p
+       LEFT JOIN ai_post_topics apt ON apt.post_id = p.id
+       WHERE apt.post_id IS NULL
+       ORDER BY p.published_at DESC`
+    : `SELECT id, COALESCE(SUBSTR(full_text, 1, 300), content_preview) as summary
+       FROM posts ORDER BY published_at DESC`;
+
+  const posts = db.prepare(query).all() as { id: string; summary: string | null }[];
+
+  // If taxonomy exists and no new posts need tagging, skip discovery
+  if (existingTaxonomy && existingTaxonomy.length > 0 && posts.length === 0) {
+    return existingTaxonomy;
+  }
 
   const postSummaries = posts
     .map(
@@ -32,8 +42,9 @@ export async function discoverTaxonomy(
   const systemPrompt = taxonomyPrompt(postSummaries, existingTaxonomy);
 
   const start = Date.now();
+  const model = MODELS.HAIKU;
   const response = await client.messages.create({
-    model: MODELS.OPUS,
+    model,
     max_tokens: 4096,
     messages: [
       {
@@ -51,7 +62,7 @@ export async function discoverTaxonomy(
 
   logger.log({
     step: "taxonomy_discovery",
-    model: MODELS.OPUS,
+    model,
     input_messages: JSON.stringify([
       { role: "user", content: "(post summaries)" },
     ]),

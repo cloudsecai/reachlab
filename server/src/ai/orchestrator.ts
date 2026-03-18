@@ -87,7 +87,7 @@ export async function runPipeline(
 
   try {
     // Step 1: Taxonomy and tagging
-    // Always run taxonomy discovery — it evolves existing topics and adds new ones
+    // Taxonomy evolves incrementally: only new posts are sent when taxonomy exists
     const existingTaxonomy = getTaxonomy(db);
     await discoverTaxonomy(client, db, logger, existingTaxonomy.length > 0 ? existingTaxonomy : undefined);
     const untaggedIds = getUntaggedPostIds(db);
