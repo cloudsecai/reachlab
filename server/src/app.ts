@@ -154,6 +154,75 @@ export function buildApp(dbPath: string) {
       error_details: errors.length > 0 ? JSON.stringify(errorDetails) : null,
     });
 
+    // Sync health check: detect post count anomalies
+    if (payload.posts && payload.posts.length > 0) {
+      const avgRow = db
+        .prepare(
+          `SELECT AVG(posts_count) as avg_count FROM (
+             SELECT posts_count FROM scrape_log
+             WHERE posts_count > 0
+             ORDER BY id DESC LIMIT 10
+           )`
+        )
+        .get() as { avg_count: number | null };
+
+      if (avgRow.avg_count && payload.posts.length < avgRow.avg_count * 0.3) {
+        const warning = `Post count anomaly: got ${payload.posts.length}, expected ~${Math.round(avgRow.avg_count)}. LinkedIn may have changed their page structure.`;
+        console.warn(`[Sync Health] ${warning}`);
+        // Use inline db.prepare since getSetting/upsertSetting are in ai-queries (dynamic import)
+        db.prepare(
+          `INSERT INTO settings (key, value) VALUES ('sync_warning', ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+        ).run(JSON.stringify({
+          message: warning,
+          detected_at: new Date().toISOString(),
+          expected: Math.round(avgRow.avg_count),
+          actual: payload.posts.length,
+        }));
+      } else {
+        // Clear warning if count looks normal
+        db.prepare("DELETE FROM settings WHERE key = 'sync_warning'").run();
+      }
+    }
+
+    // Staleness detection: newest scraped post shouldn't be much older than expected
+    if (payload.posts && payload.posts.length > 0) {
+      const postsWithDate = payload.posts.filter((p): p is typeof p & { published_at: string } => !!p.published_at);
+      if (postsWithDate.length === 0) {
+        db.prepare("DELETE FROM settings WHERE key = 'sync_stale_warning'").run();
+      } else {
+      const newestPost = postsWithDate.reduce((a, b) =>
+        new Date(a.published_at) > new Date(b.published_at) ? a : b
+      );
+      const newestAge = Date.now() - new Date(newestPost.published_at).getTime();
+      const twoDaysMs = 48 * 60 * 60 * 1000;
+
+      // Check average posting frequency from DB
+      const freqRow = db
+        .prepare(
+          `SELECT COUNT(*) as count FROM posts
+           WHERE published_at > datetime('now', '-30 days')`
+        )
+        .get() as { count: number };
+
+      // If user posts frequently (>2/week) but newest scraped post is >48h old, warn
+      if (freqRow.count >= 8 && newestAge > twoDaysMs) {
+        const warning = `Stale sync: newest scraped post is ${Math.round(newestAge / 3600000)}h old, but you typically post ${freqRow.count} times/month. A recent post may be missing.`;
+        console.warn(`[Sync Health] ${warning}`);
+        db.prepare(
+          `INSERT INTO settings (key, value) VALUES ('sync_stale_warning', ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`
+        ).run(JSON.stringify({
+          message: warning,
+          detected_at: new Date().toISOString(),
+          newest_post_age_hours: Math.round(newestAge / 3600000),
+        }));
+      } else {
+        db.prepare("DELETE FROM settings WHERE key = 'sync_stale_warning'").run();
+      }
+      } // end else (postsWithDate.length > 0)
+    }
+
     // Auto-download author profile photo if provided
     if (payload.author_photo_url) {
       const photoDir = path.dirname(dbPath);
