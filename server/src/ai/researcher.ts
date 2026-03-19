@@ -87,8 +87,9 @@ Set is_stretch: true for the 3rd story only.`,
     duration_ms: duration,
   });
 
-  // Parse the JSON response
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  // Parse the JSON response (strip markdown fences if present)
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error("Research response did not contain valid JSON");
   }

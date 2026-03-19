@@ -91,11 +91,12 @@ Be strict. If in doubt, mark as "warn" with specific advice.`;
     duration_ms: duration,
   });
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    // Fallback: return a default pass if parsing fails
+    // Fallback: conservative default — can't assess means don't pass
     return {
-      passed: true,
+      passed: false,
       checks: [{ name: "parse_error", status: "warn", detail: "Quality gate response could not be parsed" }],
     };
   }

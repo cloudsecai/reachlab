@@ -34,20 +34,17 @@ export async function generateDrafts(
   const storyContext = `**${story.headline}**\n${story.summary}\nSource: ${story.source} | ${story.age}\nPossible angles: ${story.angles.join("; ")}`;
   const assembled = assemblePrompt(db, postType, storyContext);
 
-  let totalInput = 0;
-  let totalOutput = 0;
-  const drafts: Draft[] = [];
-
-  for (const [variationType, instruction] of Object.entries(VARIATION_INSTRUCTIONS)) {
-    const start = Date.now();
-    const response = await client.messages.create({
-      model: MODELS.SONNET,
-      max_tokens: 2000,
-      system: assembled.system,
-      messages: [
-        {
-          role: "user",
-          content: `${instruction}
+  const draftPromises = Object.entries(VARIATION_INSTRUCTIONS).map(
+    async ([variationType, instruction]): Promise<{ draft: Draft; input_tokens: number; output_tokens: number }> => {
+      const start = Date.now();
+      const response = await client.messages.create({
+        model: MODELS.SONNET,
+        max_tokens: 2000,
+        system: assembled.system,
+        messages: [
+          {
+            role: "user",
+            content: `${instruction}
 
 Return JSON:
 {
@@ -57,44 +54,52 @@ Return JSON:
   "word_count": number,
   "structure_label": "string — brief description like 'Contrarian take with personal evidence'"
 }`,
+          },
+        ],
+      });
+
+      const duration = Date.now() - start;
+      const text =
+        response.content[0].type === "text" ? response.content[0].text : "";
+
+      logger.log({
+        step: `draft_${variationType}`,
+        model: MODELS.SONNET,
+        input_messages: JSON.stringify([{ role: "user", content: instruction }]),
+        output_text: text,
+        tool_calls: null,
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+        thinking_tokens: 0,
+        duration_ms: duration,
+      });
+
+      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error(`Draft ${variationType} response did not contain valid JSON`);
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        draft: {
+          type: variationType as Draft["type"],
+          hook: parsed.hook,
+          body: parsed.body,
+          closing: parsed.closing,
+          word_count: parsed.word_count ?? 0,
+          structure_label: parsed.structure_label ?? variationType,
         },
-      ],
-    });
-
-    const duration = Date.now() - start;
-    const text =
-      response.content[0].type === "text" ? response.content[0].text : "";
-
-    logger.log({
-      step: `draft_${variationType}`,
-      model: MODELS.SONNET,
-      input_messages: JSON.stringify([{ role: "user", content: instruction }]),
-      output_text: text,
-      tool_calls: null,
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      thinking_tokens: 0,
-      duration_ms: duration,
-    });
-
-    totalInput += response.usage.input_tokens;
-    totalOutput += response.usage.output_tokens;
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error(`Draft ${variationType} response did not contain valid JSON`);
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      };
     }
+  );
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    drafts.push({
-      type: variationType as Draft["type"],
-      hook: parsed.hook,
-      body: parsed.body,
-      closing: parsed.closing,
-      word_count: parsed.word_count ?? 0,
-      structure_label: parsed.structure_label ?? variationType,
-    });
-  }
+  const results = await Promise.all(draftPromises);
+  const drafts = results.map((r) => r.draft);
+  const totalInput = results.reduce((sum, r) => sum + r.input_tokens, 0);
+  const totalOutput = results.reduce((sum, r) => sum + r.output_tokens, 0);
 
   return {
     drafts,

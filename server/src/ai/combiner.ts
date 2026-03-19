@@ -18,7 +18,8 @@ export async function combineDrafts(
   logger: AiLogger,
   drafts: Draft[],
   selectedIndices: number[],
-  guidance?: string
+  guidance?: string,
+  systemPrompt?: string
 ): Promise<CombineResult> {
   const selected = selectedIndices.map((i) => drafts[i]).filter(Boolean);
 
@@ -55,6 +56,7 @@ Return the combined post as plain text (no JSON, no markdown headers). Use line 
   const response = await client.messages.create({
     model: MODELS.SONNET,
     max_tokens: 2000,
+    ...(systemPrompt ? { system: systemPrompt } : {}),
     messages: [{ role: "user", content: prompt }],
   });
 

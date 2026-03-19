@@ -85,7 +85,7 @@ Propose changes as JSON:
       "evidence": "string — why this change",
       "old_text": "string | null — for updated/retire, the current text",
       "new_text": "string | null — for new/updated, the proposed text",
-      "insight_id": number | null — for updated/retire, the ID to modify
+      "insight_id": "number or null — for updated/retire, the ID to modify"
     }
   ]
 }
@@ -116,7 +116,8 @@ Return at most 3 changes. If nothing needs changing, return {"changes": []}.`;
     duration_ms: duration,
   });
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "");
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     return { changes: [], input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens };
   }
