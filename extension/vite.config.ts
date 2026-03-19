@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
-import { copyFileSync, mkdirSync } from "fs";
+import { copyFileSync, mkdirSync, readdirSync } from "fs";
 import { build } from "vite";
 
 // We need separate builds because:
@@ -78,6 +78,16 @@ export default defineConfig({
           resolve(__dirname, "src/popup/popup.html"),
           resolve(__dirname, "dist/popup/popup.html")
         );
+
+        // Copy icons
+        const iconsDir = resolve(__dirname, "icons");
+        const distIconsDir = resolve(__dirname, "dist/icons");
+        mkdirSync(distIconsDir, { recursive: true });
+        for (const file of readdirSync(iconsDir)) {
+          if (file.endsWith(".png")) {
+            copyFileSync(resolve(iconsDir, file), resolve(distIconsDir, file));
+          }
+        }
       },
     },
   ],

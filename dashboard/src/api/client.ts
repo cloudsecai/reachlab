@@ -149,6 +149,18 @@ export interface WritingPromptHistory {
   created_at: string;
 }
 
+export interface AiRun {
+  id: number;
+  triggered_by: string;
+  post_count: number;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  total_input_tokens: number | null;
+  total_output_tokens: number | null;
+  total_cost_cents: number | null;
+}
+
 export interface TaxonomyItem {
   id: number;
   name: string;
@@ -315,4 +327,19 @@ export const api = {
   // Prompt suggestions
   insightsPromptSuggestions: () =>
     get<{ prompt_suggestions: PromptSuggestions | null }>("/insights/prompt-suggestions"),
+
+  // Auto-refresh settings
+  getAutoRefreshSettings: () =>
+    get<{ schedule: string; post_threshold: number }>("/settings/auto-refresh"),
+
+  saveAutoRefreshSettings: (settings: { schedule?: string; post_threshold?: number }) =>
+    fetch(`${BASE_URL}/settings/auto-refresh`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    }).then((r) => r.json() as Promise<{ ok: boolean }>),
+
+  // Run history
+  getAiRuns: () =>
+    get<{ runs: AiRun[]; total_cost_cents: number }>("/insights/runs"),
 };

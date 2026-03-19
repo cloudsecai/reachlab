@@ -11,7 +11,7 @@ const postSchema = z.object({
   full_text: z.string().optional(),
   hook_text: z.string().optional(),
   image_urls: z.array(z.string()).optional(),
-  video_url: z.string().url().optional(),
+  video_url: z.string().url().nullable().optional(),
 });
 
 const postMetricsSchema = z.object({

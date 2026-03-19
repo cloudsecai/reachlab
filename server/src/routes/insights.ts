@@ -162,4 +162,24 @@ export function registerInsightsRoutes(app: FastifyInstance, db: Database.Databa
     const days = parseInt(q.days ?? "90", 10) || 90;
     return { points: getSparklineData(db, days) };
   });
+
+  // ── Run history with costs ────────────────────────────────
+
+  app.get("/api/insights/runs", async () => {
+    const runs = db
+      .prepare(
+        `SELECT id, triggered_by, post_count, status, started_at, completed_at,
+                total_input_tokens, total_output_tokens, total_cost_cents
+         FROM ai_runs
+         WHERE status = 'completed'
+         ORDER BY id DESC LIMIT 20`
+      )
+      .all();
+    const totalCostCents = db
+      .prepare(
+        "SELECT COALESCE(SUM(total_cost_cents), 0) as total FROM ai_runs WHERE status = 'completed'"
+      )
+      .get() as { total: number };
+    return { runs, total_cost_cents: totalCostCents.total };
+  });
 }

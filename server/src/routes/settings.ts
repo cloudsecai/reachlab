@@ -110,4 +110,33 @@ export function registerSettingsRoutes(
   app.get("/api/settings/writing-prompt/history", async () => {
     return { history: getWritingPromptHistory(db) };
   });
+
+  // ── Auto-refresh settings ────────────────────────────────
+
+  app.get("/api/settings/auto-refresh", async () => {
+    const schedule = getSetting(db, "auto_interpret_schedule") ?? "weekly";
+    const postThreshold = getSetting(db, "auto_interpret_post_threshold") ?? "5";
+    return { schedule, post_threshold: parseInt(postThreshold, 10) };
+  });
+
+  app.put("/api/settings/auto-refresh", async (request, reply) => {
+    const body = request.body as {
+      schedule?: string;
+      post_threshold?: number;
+    };
+
+    if (body.schedule !== undefined) {
+      if (!["daily", "weekly", "off"].includes(body.schedule)) {
+        return reply.status(400).send({ error: "schedule must be daily, weekly, or off" });
+      }
+      upsertSetting(db, "auto_interpret_schedule", body.schedule);
+    }
+
+    if (body.post_threshold !== undefined) {
+      const n = Math.max(1, Math.min(50, Math.round(body.post_threshold)));
+      upsertSetting(db, "auto_interpret_post_threshold", String(n));
+    }
+
+    return { ok: true };
+  });
 }
