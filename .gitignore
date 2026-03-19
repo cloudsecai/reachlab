@@ -6,8 +6,8 @@ dist/
 .env
 
 # User data — DB, images, author photo, backups
-data/*
-!data/.gitkeep
+**/data/*
+!**/data/.gitkeep
 backups/
 
 # Spike files with personal data
