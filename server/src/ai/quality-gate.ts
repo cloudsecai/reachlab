@@ -65,36 +65,11 @@ Check each of these quality dimensions and return JSON:
 {
   "passed": boolean,  // true if no "warn" checks
   "checks": [
-    {
-      "name": "voice_match",
+${QUALITY_GATE_CHECKS.map((c) => `    {
+      "name": "${c.name}",
       "status": "pass" | "warn",
-      "detail": "string — brief explanation"
-    },
-    {
-      "name": "ai_tropes",
-      "status": "pass" | "warn",
-      "detail": "string — list any detected AI-isms"
-    },
-    {
-      "name": "hook_strength",
-      "status": "pass" | "warn",
-      "detail": "string — does it open with friction/claim, not a question or context dump?"
-    },
-    {
-      "name": "engagement_close",
-      "status": "pass" | "warn",
-      "detail": "string — process question vs opinion question"
-    },
-    {
-      "name": "concrete_specifics",
-      "status": "pass" | "warn",
-      "detail": "string — uses named tools/metrics/experiences vs abstractions"
-    },
-    {
-      "name": "ending_quality",
-      "status": "pass" | "warn",
-      "detail": "string — extends the idea vs summarizes/recaps"
-    }
+      "detail": "string — ${c.prompt}"
+    }`).join(",\n")}
   ]
 }
 
