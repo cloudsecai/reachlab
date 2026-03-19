@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { AiLogger } from "./logger.js";
-import { MODELS } from "./client.js";
+import { MODELS, calculateCostCents } from "./client.js";
 import { interpretStats } from "./analyzer.js";
 import { buildStatsReport } from "./stats-report.js";
 import { buildSystemPrompt, buildTopPerformerPrompt } from "./prompts.js";
@@ -17,6 +17,7 @@ import {
   failRun,
   getRunningRun,
   getLatestCompletedRun,
+  getRunLogs,
   getTaxonomy,
   getUntaggedPostIds,
   getActiveInsights,
@@ -62,7 +63,7 @@ export function shouldRunPipeline(
 
 // ── Pipeline ───────────────────────────────────────────────
 
-export async function runPipeline(
+export async function runTaggingPipeline(
   client: Anthropic,
   db: Database.Database,
   triggeredBy: string
@@ -73,8 +74,64 @@ export async function runPipeline(
   }
 
   const postCount = getPostCountWithMetrics(db);
-  // Skip threshold check for retag/force triggers
-  if (triggeredBy !== "retag" && triggeredBy !== "force") {
+  const runId = createRun(db, triggeredBy, postCount);
+  const logger = new AiLogger(db, runId);
+
+  try {
+    // Step 1: Taxonomy and tagging
+    const existingTaxonomy = getTaxonomy(db);
+    await discoverTaxonomy(client, db, logger, existingTaxonomy.length > 0 ? existingTaxonomy : undefined);
+    const untaggedIds = getUntaggedPostIds(db);
+    if (untaggedIds.length > 0) {
+      const posts = db
+        .prepare(
+          `SELECT id, COALESCE(full_text, content_preview) as content_preview
+           FROM posts WHERE id IN (${untaggedIds.map(() => "?").join(",")})`
+        )
+        .all(...untaggedIds) as { id: string; content_preview: string | null }[];
+      await tagPosts(client, db, posts, logger);
+    }
+
+    // Step 2: Image classification
+    const dataDir = path.dirname(db.name);
+    await classifyImages(client, db, dataDir, logger);
+
+    // Sum tokens from ai_logs for this run
+    const tokenSums = db
+      .prepare(
+        `SELECT COALESCE(SUM(input_tokens), 0) as input_tokens,
+                COALESCE(SUM(output_tokens), 0) as output_tokens
+         FROM ai_logs WHERE run_id = ?`
+      )
+      .get(runId) as { input_tokens: number; output_tokens: number };
+
+    completeRun(db, runId, {
+      input_tokens: tokenSums.input_tokens,
+      output_tokens: tokenSums.output_tokens,
+      cost_cents: calculateCostCents(getRunLogs(db, runId)),
+    });
+
+    return { runId, status: "completed" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    failRun(db, runId, message);
+    return { runId, status: "failed", error: message };
+  }
+}
+
+export async function runFullPipeline(
+  client: Anthropic,
+  db: Database.Database,
+  triggeredBy: string
+): Promise<PipelineResult> {
+  const running = getRunningRun(db);
+  if (running) {
+    return { runId: running.id, status: "failed", error: "A pipeline run is already in progress" };
+  }
+
+  const postCount = getPostCountWithMetrics(db);
+  // Skip threshold check for retag/force/auto triggers
+  if (triggeredBy !== "retag" && triggeredBy !== "force" && triggeredBy !== "auto") {
     const lastRun = getLatestCompletedRun(db);
     const check = shouldRunPipeline(postCount, lastRun ? { post_count: lastRun.post_count } : null);
     if (!check.should) {
@@ -345,7 +402,7 @@ export async function runPipeline(
     completeRun(db, runId, {
       input_tokens: tokenSums.input_tokens,
       output_tokens: tokenSums.output_tokens,
-      cost_cents: 0,
+      cost_cents: calculateCostCents(getRunLogs(db, runId)),
     });
 
     return { runId, status: "completed" };
@@ -355,3 +412,5 @@ export async function runPipeline(
     return { runId, status: "failed", error: message };
   }
 }
+
+export const runPipeline = runFullPipeline;

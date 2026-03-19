@@ -149,6 +149,15 @@ export function getLatestCompletedRun(
   );
 }
 
+export function getRunLogs(
+  db: Database.Database,
+  runId: number
+): Array<{ model: string; input_tokens: number; output_tokens: number }> {
+  return db
+    .prepare("SELECT model, input_tokens, output_tokens FROM ai_logs WHERE run_id = ?")
+    .all(runId) as Array<{ model: string; input_tokens: number; output_tokens: number }>;
+}
+
 // ── ai_taxonomy ────────────────────────────────────────────
 
 export function upsertTaxonomy(
