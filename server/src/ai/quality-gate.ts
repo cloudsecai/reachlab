@@ -3,6 +3,39 @@ import { MODELS } from "./client.js";
 import { AiLogger } from "./logger.js";
 import type { GenerationRule, CoachingInsight, QualityGate } from "../db/generate-queries.js";
 
+export const QUALITY_GATE_CHECKS = [
+  {
+    name: "voice_match",
+    label: "Voice match",
+    prompt: "Does the post sound like the author's established voice? Check against writing rules for tone, specificity, and sentence style.",
+  },
+  {
+    name: "ai_tropes",
+    label: "AI tropes",
+    prompt: "Check for AI-generated writing patterns: hedge words, correlative constructions, rhetorical questions as filler, meandering intros, recapping conclusions, abstract analysis without stakes, theory before application, opening with context instead of friction.",
+  },
+  {
+    name: "hook_strength",
+    label: "Hook strength",
+    prompt: "Does the hook open with friction, a claim, or a surprise? Fail if it opens with a question, context dump, historical background, or generic statement.",
+  },
+  {
+    name: "engagement_close",
+    label: "Engagement close",
+    prompt: "Does the closing question invite informed practitioner responses? Fail if it's a generic opinion question ('What do you think?') or summarizes the post.",
+  },
+  {
+    name: "concrete_specifics",
+    label: "Concrete specifics",
+    prompt: "Does the post use named tools, specific metrics, real experiences, or concrete examples? Fail if it relies on vague abstractions or generic industry analysis.",
+  },
+  {
+    name: "ending_quality",
+    label: "Ending quality",
+    prompt: "Does the ending extend the idea forward or provoke new thinking? Fail if it summarizes, recaps, or restates the main point.",
+  },
+] as const;
+
 /**
  * Run quality gate assessment on a final draft.
  * Checks against writing rules, coaching insights, and anti-AI tropes.

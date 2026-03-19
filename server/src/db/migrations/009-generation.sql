@@ -132,8 +132,43 @@ CREATE TABLE IF NOT EXISTS generation_topic_log (
 
 CREATE INDEX IF NOT EXISTS idx_generation_topic_log_created ON generation_topic_log(created_at);
 
--- Seed default post type templates
+-- Seed default post type templates (refined)
 INSERT OR IGNORE INTO post_type_templates (post_type, template_text) VALUES
-  ('news', 'Write a LinkedIn post reacting to a news story. Open with a hook that makes the reader stop scrolling. State a non-obvious take grounded in practitioner experience. One idea per post. Close with a question that invites informed disagreement.'),
-  ('topic', 'Write a LinkedIn post exploring a professional topic. Open with a hook based on a surprising insight or counterintuitive claim. Draw from direct experience building, shipping, or operating. Close with a question that triggers substantive practitioner responses.'),
-  ('insight', 'Write a LinkedIn post sharing a hard-won professional insight. Open with the sharpest version of the lesson. Provide one concrete example from direct experience. Close with a question that makes other practitioners reflect on their own experience.');
+  ('news', 'Write a LinkedIn post reacting to a news story.
+
+Structure:
+- Hook: State a non-obvious take on the news in one punchy sentence. Do NOT start with the news itself.
+- Context: 1-2 sentences on what happened (assume reader hasn''t seen it).
+- Take: Your practitioner perspective — what this means for people who build/ship/operate. Use specific experience.
+- Close: A process question that invites practitioners to share their approach.
+
+Constraints:
+- One take per post. Don''t hedge with "on one hand."
+- Ground claims in what you''ve built, shipped, or observed — not industry analysis.
+- 150-250 words. Every sentence earns its place.'),
+
+  ('topic', 'Write a LinkedIn post exploring a professional topic from practitioner experience.
+
+Structure:
+- Hook: A surprising insight, counterintuitive claim, or friction point. Not a question.
+- Setup: What you observed, built, or broke that led to this insight. Be specific.
+- Expansion: One concrete example with named tools, metrics, or outcomes.
+- Close: A question that triggers substantive practitioner responses about their process.
+
+Constraints:
+- Draw from direct experience, not secondhand analysis.
+- One idea per post. If the outline has two ideas, pick the sharper one.
+- 150-300 words. Favor short declarative sentences for impact.'),
+
+  ('insight', 'Write a LinkedIn post sharing a hard-won professional insight.
+
+Structure:
+- Hook: The sharpest version of the lesson in one sentence. Lead with the conclusion.
+- Story: The specific moment or experience that taught this lesson. Include sensory/emotional detail.
+- Principle: The generalizable takeaway, grounded in the specific story.
+- Close: A reflective question that makes other practitioners examine their own experience.
+
+Constraints:
+- The insight must come from direct experience, not observation or reading.
+- Include at least one specific detail (a tool name, a dollar amount, a timeline, a failure mode).
+- 150-250 words. The story should be tight — no scene-setting preamble.');

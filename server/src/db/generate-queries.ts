@@ -439,26 +439,30 @@ export function getRecentTopics(
 
 export const DEFAULT_RULES: Array<{ category: string; rule_text: string; example_text?: string; sort_order: number }> = [
   // Voice & tone
-  { category: "voice_tone", rule_text: "Write as a practitioner sharing hard-won experience, not a thought leader pontificating", sort_order: 0 },
-  { category: "voice_tone", rule_text: "Favor concrete specifics over vague abstractions", example_text: "Favor: \"$400/month replacing $400k/year\" — Avoid: \"cost-effective solution\"", sort_order: 1 },
-  { category: "voice_tone", rule_text: "Use embodied experience (\"I shipped\", \"We discovered\") not generic descriptions (\"Companies should\", \"Leaders must\")", sort_order: 2 },
-  { category: "voice_tone", rule_text: "One idea per post. Resist the urge to cover everything", sort_order: 3 },
-  { category: "voice_tone", rule_text: "Match conversational register — write like you'd explain it to a sharp colleague over coffee", sort_order: 4 },
+  { category: "voice_tone", rule_text: "Favor concrete specifics over vague abstractions", example_text: 'Favor: "$400/month replacing $400k/year" — Avoid: "cost-effective solution"', sort_order: 0 },
+  { category: "voice_tone", rule_text: "Favor embodied experience over generic descriptions", example_text: 'Favor: "I watched the deploy fail at 2am" — Avoid: "deployment issues can occur"', sort_order: 1 },
+  { category: "voice_tone", rule_text: "Write with a practitioner voice, not an analyst voice", example_text: 'Favor: "Here\'s what I shipped" — Avoid: "Industry trends suggest"', sort_order: 2 },
+  { category: "voice_tone", rule_text: "Use short, declarative sentences for impact. Long sentences for context.", sort_order: 3 },
+  { category: "voice_tone", rule_text: "Sound like a person talking to a peer, not a brand talking to an audience", sort_order: 4 },
   // Structure & formatting
-  { category: "structure_formatting", rule_text: "Open with friction, a claim, or a surprising insight — never context, history, or a rhetorical question", sort_order: 0 },
-  { category: "structure_formatting", rule_text: "Close with a question that invites informed disagreement or practitioner reflection, not a generic opinion poll", sort_order: 1 },
-  { category: "structure_formatting", rule_text: "Keep paragraphs to 1-2 sentences. Use line breaks for rhythm", sort_order: 2 },
-  { category: "structure_formatting", rule_text: "End by extending the idea forward, not summarizing or recapping what was already said", sort_order: 3 },
-  { category: "structure_formatting", rule_text: "250-400 words. Shorter is better if the idea is complete", sort_order: 4 },
+  { category: "structure_formatting", rule_text: "One idea per post. If you need a second idea, write a second post.", sort_order: 0 },
+  { category: "structure_formatting", rule_text: "Open with friction, a claim, or a surprise — never with context or a question", example_text: 'Favor: "I fired our best engineer last month." — Avoid: "Have you ever wondered about team dynamics?"', sort_order: 1 },
+  { category: "structure_formatting", rule_text: "Close with a process question that invites practitioner responses, not opinion questions", example_text: 'Favor: "What\'s your process for X?" — Avoid: "What do you think?"', sort_order: 2 },
+  { category: "structure_formatting", rule_text: "End by extending the idea forward, never by summarizing or recapping", sort_order: 3 },
+  { category: "structure_formatting", rule_text: "Use line breaks between every 1-2 sentences for mobile readability", sort_order: 4 },
+  { category: "structure_formatting", rule_text: "Front-load the practical application, then provide theory if needed", sort_order: 5 },
   // Anti-AI tropes
-  { category: "anti_ai_tropes", rule_text: "No hedging words: \"actually\", \"just\", \"maybe\", \"perhaps\", \"honestly\"", sort_order: 0 },
-  { category: "anti_ai_tropes", rule_text: "No correlative filler: \"Not X, but Y\" / \"It's not about X, it's about Y\" constructions", sort_order: 1 },
-  { category: "anti_ai_tropes", rule_text: "No rhetorical questions as filler or transitions", sort_order: 2 },
-  { category: "anti_ai_tropes", rule_text: "No meandering intros that set context before getting to the point", sort_order: 3 },
-  { category: "anti_ai_tropes", rule_text: "No recapping conclusions that summarize what was already said", sort_order: 4 },
-  { category: "anti_ai_tropes", rule_text: "No emoji as bullet points or section markers", sort_order: 5 },
-  { category: "anti_ai_tropes", rule_text: "No \"Here's the thing\" / \"Let me tell you\" / \"The truth is\" throat-clearing", sort_order: 6 },
-  { category: "anti_ai_tropes", rule_text: "No abstract industry analysis without personal stakes or direct experience", sort_order: 7 },
+  { category: "anti_ai_tropes", rule_text: "No hedge words: actually, maybe, just, perhaps, simply, basically, essentially, literally", sort_order: 0 },
+  { category: "anti_ai_tropes", rule_text: 'No correlative constructions: "not X, but Y" / "less about X, more about Y"', example_text: 'Instead of "It\'s not about the tools, but the people" — just state the claim directly', sort_order: 1 },
+  { category: "anti_ai_tropes", rule_text: "No rhetorical questions as filler or transitions between paragraphs", example_text: 'Remove: "But what does this really mean?" — just make the point', sort_order: 2 },
+  { category: "anti_ai_tropes", rule_text: "No meandering introductions — start with the sharpest version of the claim", example_text: 'Avoid: "In today\'s rapidly evolving landscape..." — start with the insight', sort_order: 3 },
+  { category: "anti_ai_tropes", rule_text: "No recapping conclusions that summarize what was already said", example_text: 'Avoid: "In summary..." or "The bottom line is..." — extend the idea instead', sort_order: 4 },
+  { category: "anti_ai_tropes", rule_text: "No abstract industry analysis without personal stakes or experience", example_text: 'Avoid: "The AI industry is transforming..." — instead share what you built/broke/learned', sort_order: 5 },
+  { category: "anti_ai_tropes", rule_text: "No process documentation without emotional arc or narrative tension", sort_order: 6 },
+  { category: "anti_ai_tropes", rule_text: "No theory before practical application — lead with what happened, not why it matters conceptually", sort_order: 7 },
+  { category: "anti_ai_tropes", rule_text: "No opening with historical context or background — open with friction or a claim", example_text: 'Avoid: "Over the past decade, the industry has seen..." — start with now', sort_order: 8 },
+  { category: "anti_ai_tropes", rule_text: 'No "delve", "landscape", "paradigm shift", "leverage", "synergy", "unlock", "game-changer"', sort_order: 9 },
+  { category: "anti_ai_tropes", rule_text: "No emoji-heavy formatting or numbered listicles disguised as thought leadership", sort_order: 10 },
 ];
 
 export function seedDefaultRules(db: Database.Database): void {
