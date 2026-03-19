@@ -8,7 +8,9 @@ import { activityIdToDate } from "../shared/utils.js";
 const SERVER_URL = "http://localhost:3210";
 const ALARM_NAME = "daily-sync";
 const ALARM_PERIOD_MINUTES = 30;
-const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SYNC_HOURS = [9, 21]; // 9 AM and 9 PM local time
+const SYNC_WINDOW_MS = 45 * 60 * 1000; // 45-minute window after target hour
+const LIGHT_SYNC_RECENT_POSTS = 5; // Evening sync: only scrape metrics for this many recent posts
 const BATCH_SIZE = 25;
 const PACING_MIN_MS = 1000;
 const PACING_MAX_MS = 3000;
@@ -150,12 +152,25 @@ async function trySync(manual = false) {
   if (backfillQueue) return; // Backfill still running, skip sync
 
   if (!manual) {
-    // Check if sync needed (server-side state survives reinstalls)
+    // Only sync during configured time windows (e.g. 9 AM, 9 PM)
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const inSyncWindow = SYNC_HOURS.some((h) => {
+      if (currentHour === h) return true;
+      // Allow spilling into the next hour if within the window
+      if (currentHour === (h + 1) % 24 && currentMinute <= 15) return true;
+      return false;
+    });
+    if (!inSyncWindow) return;
+
+    // Check if we already synced during this window
     try {
       const res = await fetch(`${SERVER_URL}/api/sync-state`);
       if (res.ok) {
         const data = await res.json();
-        if (data.last_sync_at && Date.now() - data.last_sync_at < SYNC_INTERVAL_MS) return;
+        // Skip if synced within the last 6 hours (prevents double-sync in same window)
+        if (data.last_sync_at && Date.now() - data.last_sync_at < 6 * 60 * 60 * 1000) return;
       }
     } catch {}
   }
@@ -172,14 +187,7 @@ async function trySync(manual = false) {
 }
 
 async function startSync() {
-  await chrome.storage.session.set({
-    syncInProgress: true,
-    syncBatchCursor: 0,
-    syncPosts: [],
-    isBackfill: false,
-  });
-
-  // Check if this is the first sync (backfill) — use server-side state
+  // Determine sync type: backfill (first ever), light (evening), or full (morning)
   let isBackfill = true;
   try {
     const res = await fetch(`${SERVER_URL}/api/sync-state`);
@@ -188,6 +196,18 @@ async function startSync() {
       isBackfill = !data.last_sync_at;
     }
   } catch {}
+
+  // Evening sync (9 PM window) = light sync — just discover new posts + recent metrics
+  const currentHour = new Date().getHours();
+  const isLightSync = !isBackfill && (currentHour >= 20 || currentHour <= 1);
+
+  await chrome.storage.session.set({
+    syncInProgress: true,
+    syncBatchCursor: 0,
+    syncPosts: [],
+    isBackfill,
+    isLightSync,
+  });
 
   try {
     // Create background tab
@@ -249,20 +269,28 @@ async function startSync() {
 
       // Filter posts for detail scraping:
       // - Backfill: scrape all posts
-      // - Daily sync: only posts <30 days old, skip those with recent metrics
+      // - Light sync (evening): only the most recent N posts
+      // - Full sync (morning): posts <30 days old, skip those with recent metrics
       const recentMetricsSet = new Set<string>(ingestResult?.has_recent_metrics ?? []);
-      const postIdsToScrape = isBackfill
-        ? posts.map((p) => p.id)
-        : posts
+      let postIdsToScrape: string[];
+      if (isBackfill) {
+        postIdsToScrape = posts.map((p) => p.id);
+      } else if (isLightSync) {
+        // Evening: just get updated stats for the most recent posts
+        postIdsToScrape = posts
+          .slice(0, LIGHT_SYNC_RECENT_POSTS)
+          .map((p) => p.id);
+      } else {
+        postIdsToScrape = posts
             .filter((p) => {
               const publishedDate = activityIdToDate(p.id);
               const ageMs = Date.now() - publishedDate.getTime();
               if (ageMs >= METRIC_DECAY_DAYS * 24 * 60 * 60 * 1000) return false;
-              // Skip posts that already have recent metrics
               if (recentMetricsSet.has(p.id)) return false;
               return true;
             })
             .map((p) => p.id);
+      }
 
       // Store posts for batch detail scraping
       await chrome.storage.session.set({
@@ -497,7 +525,14 @@ async function scrapePostPages(
 }
 
 async function scrapeRemainingPages(tabId: number) {
-  const { isBackfill } = await chrome.storage.session.get("isBackfill");
+  const { isBackfill, isLightSync } = await chrome.storage.session.get(["isBackfill", "isLightSync"]);
+
+  // Light sync skips audience/profile/search — just finish
+  if (isLightSync) {
+    await finishSync();
+    return;
+  }
+
   const pacingMin = isBackfill ? BACKFILL_PACING_MIN_MS : PACING_MIN_MS;
   const pacingMax = isBackfill ? BACKFILL_PACING_MAX_MS : PACING_MAX_MS;
 
