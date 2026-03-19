@@ -104,6 +104,7 @@ export function assemblePrompt(
       finalCoachingText = formatCoachingLayer(trimmedInsights);
       coachingTokens = estimateTokens(finalCoachingText);
     } else {
+      console.warn(`[prompt-assembler] Rules alone (${rulesTokens} tokens) exceed budget (${TOKEN_BUDGET}). Coaching insights omitted.`);
       finalCoachingText = "";
       coachingTokens = 0;
     }

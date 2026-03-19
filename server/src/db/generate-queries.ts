@@ -259,10 +259,16 @@ export function updateGeneration(
     total_cost_cents: number;
   }>
 ): void {
+  const ALLOWED_COLUMNS = new Set([
+    "selected_draft_indices", "combining_guidance", "final_draft",
+    "quality_gate_json", "status", "matched_post_id",
+    "total_input_tokens", "total_output_tokens", "total_cost_cents",
+    "prompt_snapshot",
+  ]);
   const sets: string[] = ["updated_at = CURRENT_TIMESTAMP"];
   const params: any[] = [];
   for (const [key, value] of Object.entries(updates)) {
-    if (value !== undefined) {
+    if (value !== undefined && ALLOWED_COLUMNS.has(key)) {
       sets.push(`${key} = ?`);
       params.push(value);
     }
