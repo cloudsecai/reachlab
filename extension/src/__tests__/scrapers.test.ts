@@ -283,6 +283,20 @@ describe("scrapePostPage", () => {
     expect(result.hook_text).toBe("Just text, no images");
     expect(result.image_urls).toEqual([]);
   });
+
+  it("returns null for text fields when post is image-only without text container", () => {
+    const doc = createDoc(`
+      <div class="feed-shared-update-v2">
+        <div class="feed-shared-image">
+          <img src="https://media.licdn.com/dms/image/v2/test.jpg" />
+        </div>
+      </div>
+    `);
+    const result = scrapePostPage(doc);
+    expect(result.hook_text).toBeNull();
+    expect(result.full_text).toBeNull();
+    expect(result.image_urls).toEqual(["https://media.licdn.com/dms/image/v2/test.jpg"]);
+  });
 });
 
 describe("Zod validation of scraped data", () => {
