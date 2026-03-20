@@ -43,6 +43,12 @@ function getClient(): Anthropic {
 }
 
 export function registerGenerateRoutes(app: FastifyInstance, db: Database.Database): void {
+  // Seed default rules if table is empty (first run)
+  const ruleCount = (db.prepare("SELECT COUNT(*) as count FROM generation_rules").get() as any).count;
+  if (ruleCount === 0) {
+    seedDefaultRules(db);
+  }
+
   // ── Research ─────────────────────────────────────────────
 
   app.post("/api/generate/research", async (request, reply) => {
